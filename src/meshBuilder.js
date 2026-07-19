@@ -1,0 +1,93 @@
+import { BLOCK } from './config.js';
+import { materials } from './atlas.js';
+import { blocks, isSolid, getBlock } from './world.js';
+
+export const geometry = new THREE.BoxGeometry(BLOCK, BLOCK, BLOCK);
+
+// Bake fake directional lighting into vertex colors so each cube face reads
+// as a distinct plane: top brightest, sides mid, bottom darkest. BoxGeometry
+// face order is +X, -X, +Y, -Y, +Z, -Z (4 verts each = 24 total).
+(function bakeFaceShading() {
+  const FACE_BRIGHTNESS = [
+    0.86, // +X  right
+    0.72, // -X  left
+    1.00, // +Y  top
+    0.55, // -Y  bottom
+    0.80, // +Z  front
+    0.66  // -Z  back
+  ];
+  const count = geometry.attributes.position.count; // 24
+  const colors = new Float32Array(count * 3);
+  for (let f = 0; f < 6; f++) {
+    const b = FACE_BRIGHTNESS[f];
+    for (let v = 0; v < 4; v++) {
+      const i = (f * 4 + v) * 3;
+      colors[i] = b; colors[i + 1] = b; colors[i + 2] = b;
+    }
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+})();
+
+export const meshGroup = new THREE.Group();
+const meshes = {}; // type -> InstancedMesh
+const dummy = new THREE.Object3D();
+
+// types whose meshes need rebuilding this frame
+let dirtyTypes = new Set();
+
+function neighborsAllSolid(x, y, z) {
+  return isSolid(x + 1, y, z) && isSolid(x - 1, y, z) &&
+         isSolid(x, y + 1, z) && isSolid(x, y - 1, z) &&
+         isSolid(x, y, z + 1) && isSolid(x, y, z - 1);
+}
+
+// Rebuild only the instanced meshes for the given types. Breaking/placing a
+// block also exposes/hides neighbour faces, so callers must mark the touched
+// block's type AND its 6 neighbours' types dirty (see markEditDirty).
+export function rebuildTypes(types) {
+  const grouped = {};
+  for (const t of types) grouped[t] = [];
+
+  for (const [k, type] of blocks) {
+    if (!grouped[type]) continue;              // type not dirty, skip
+    const [x, y, z] = k.split(',').map(Number);
+    if (neighborsAllSolid(x, y, z)) continue;  // fully hidden block
+    grouped[type].push([x, y, z]);
+  }
+
+  for (const t of types) {
+    if (meshes[t]) {
+      meshGroup.remove(meshes[t]);
+      delete meshes[t];
+    }
+    const list = grouped[t];
+    if (!list || list.length === 0) continue;
+    const mesh = new THREE.InstancedMesh(geometry, materials[t], list.length);
+    for (let i = 0; i < list.length; i++) {
+      dummy.position.set(list[i][0], list[i][1], list[i][2]);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.userData.type = t;
+    meshGroup.add(mesh);
+    meshes[t] = mesh;
+  }
+}
+
+export function flushDirty() {
+  if (dirtyTypes.size === 0) return;
+  rebuildTypes(dirtyTypes);
+  dirtyTypes.clear();
+}
+
+// mark a block's own type plus every neighbour's type as needing a rebuild
+export function markEditDirty(x, y, z, ownType) {
+  if (ownType) dirtyTypes.add(ownType);
+  const nb = [
+    getBlock(x + 1, y, z), getBlock(x - 1, y, z),
+    getBlock(x, y + 1, z), getBlock(x, y - 1, z),
+    getBlock(x, y, z + 1), getBlock(x, y, z - 1)
+  ];
+  for (const t of nb) if (t) dirtyTypes.add(t);
+}

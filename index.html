@@ -29,11 +29,55 @@
     cursor: pointer; position: relative;
   }
   .slot.active { border-color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.8); }
-  .slot .swatch { width: 32px; height: 32px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.4); }
+  .slot .swatch {
+    width: 32px; height: 32px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.4);
+    background-size: cover; image-rendering: pixelated; image-rendering: crisp-edges;
+  }
   .slot .num {
     position: absolute; top: 2px; left: 4px; font-size: 10px; color: #fff;
     text-shadow: 0 0 3px #000;
   }
+  .slot .count {
+    position: absolute; bottom: 1px; right: 3px; font-size: 11px; font-weight: bold;
+    color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000;
+  }
+
+  #modeLabel {
+    position: fixed; top: 40px; right: 14px; color: #fff; z-index: 10; font-size: 12px; opacity: 0.75;
+  }
+
+  #healthBar {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+    width: 220px; height: 14px; background: rgba(20,20,20,0.55);
+    border: 2px solid rgba(255,255,255,0.3); border-radius: 7px;
+    overflow: hidden; z-index: 10; display: none;
+  }
+  #healthFill {
+    height: 100%; width: 100%; background: linear-gradient(90deg, #d32f2f, #f66);
+    transition: width 0.15s;
+  }
+
+  #blockPicker {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.65); color: #fff;
+    display: none; align-items: center; justify-content: center; flex-direction: column;
+    z-index: 25; text-align: center;
+  }
+  #blockPicker h1 { margin: 0 0 14px; font-size: 26px; }
+  #pickerGrid {
+    display: grid; grid-template-columns: repeat(5, 64px); gap: 10px;
+  }
+  .picker-cell {
+    width: 64px; height: 64px; background: rgba(255,255,255,0.12);
+    border: 2px solid rgba(255,255,255,0.35); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .picker-cell:hover { background: rgba(255,255,255,0.24); border-color: #fff; }
+  .picker-cell .swatch {
+    width: 40px; height: 40px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.4);
+    background-size: cover; image-rendering: pixelated; image-rendering: crisp-edges;
+  }
+  #blockPicker .hint { margin-top: 16px; font-size: 13px; opacity: 0.7; }
 
   #info {
     position: fixed; top: 14px; left: 14px; color: #fff; z-index: 10;
@@ -50,425 +94,75 @@
   #overlay p { margin: 4px 0; font-size: 15px; opacity: 0.9; }
   #overlay .hint { margin-top: 20px; font-size: 13px; opacity: 0.7; }
   #fps { position: fixed; top: 14px; right: 14px; color: #fff; z-index: 10; font-size: 12px; opacity: 0.6; }
+
+  #damageFlash {
+    position: fixed; inset: 0; pointer-events: none; z-index: 15;
+    background: radial-gradient(ellipse at center, rgba(200,0,0,0) 55%, rgba(180,0,0,0.55) 100%);
+    opacity: 0;
+  }
+  #damageFlash.hit { animation: damageFlashAnim 0.45s ease-out; }
+  @keyframes damageFlashAnim {
+    0%   { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  .menu-btn {
+    margin: 6px 0; padding: 10px 28px; min-width: 200px;
+    font-size: 15px; font-family: inherit; color: #fff; cursor: pointer;
+    background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.35);
+    border-radius: 8px; transition: background 0.12s, border-color 0.12s;
+  }
+  .menu-btn:hover { background: rgba(255,255,255,0.24); border-color: #fff; }
+  #menuButtons, #controlsPanel { display: flex; flex-direction: column; align-items: center; }
+  #controlsPanel { display: none; }
+  #controlsPanel table { margin: 8px 0 16px; border-collapse: collapse; font-size: 14px; }
+  #controlsPanel td { padding: 3px 14px; text-align: left; opacity: 0.92; }
+  #controlsPanel td.key {
+    font-weight: bold; color: #ffe08a; text-align: right;
+    white-space: nowrap; font-family: 'Segoe UI', monospace;
+  }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="crosshair"></div>
-<div id="info">
-  <b>WASD</b> move &nbsp; <b>Space</b> jump<br>
-  <b>Left click</b> destroy &nbsp; <b>Right click</b> place<br>
-  <b>1-5</b> select block &nbsp; <b>Esc</b> release mouse
-</div>
 <div id="fps"></div>
+<div id="damageFlash"></div>
+<div id="modeLabel"></div>
+<div id="healthBar"><div id="healthFill"></div></div>
 <div id="hotbar"></div>
+<div id="blockPicker">
+  <h1>Select Block</h1>
+  <div id="pickerGrid"></div>
+  <p class="hint">Click a block to assign it to the selected slot &middot; B or Esc to close</p>
+</div>
 <div id="overlay">
-  <h1>Block World</h1>
-  <p>Click to play</p>
-  <p class="hint">WASD to move, mouse to look, left click to break, right click to place</p>
+  <div id="menuButtons">
+    <h1 id="menuTitle">Block World</h1>
+    <p id="menuSubtitle">Click to play</p>
+    <button class="menu-btn" id="btnResume">Play</button>
+    <button class="menu-btn" id="btnControls">Controls</button>
+    <button class="menu-btn" id="btnRegen">Regenerate World</button>
+    <button class="menu-btn" id="btnCreative">Mode: Creative</button>
+  </div>
+  <div id="controlsPanel">
+    <h1>Controls</h1>
+    <table>
+      <tr><td class="key">WASD</td><td>Move</td></tr>
+      <tr><td class="key">Mouse</td><td>Look around</td></tr>
+      <tr><td class="key">Space</td><td>Jump</td></tr>
+      <tr><td class="key">Left click</td><td>Destroy block</td></tr>
+      <tr><td class="key">Right click</td><td>Place block</td></tr>
+      <tr><td class="key">1 – 5</td><td>Select block type</td></tr>
+      <tr><td class="key">B</td><td>Open block picker</td></tr>
+      <tr><td class="key">C</td><td>Toggle Creative / Survival</td></tr>
+      <tr><td class="key">Esc</td><td>Pause / menu</td></tr>
+    </table>
+    <button class="menu-btn" id="btnBack">Back</button>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script>
-(() => {
-  // ---------- Config ----------
-  const WORLD_SIZE = 48;          // world is WORLD_SIZE x WORLD_SIZE columns
-  const WORLD_HALF = WORLD_SIZE / 2;
-  const MAX_HEIGHT = 14;
-  const BLOCK = 1;                // block size
-  const GRAVITY = -22;
-  const JUMP_SPEED = 8.2;
-  const MOVE_SPEED = 6.0;
-  const PLAYER_RADIUS = 0.32;
-  const EYE_HEIGHT = 1.62;
-  const REACH = 7;
-
-  const BLOCK_TYPES = {
-    grass: { color: 0x5aa93b },
-    dirt:  { color: 0x8a5a34 },
-    stone: { color: 0x8a8a8e },
-    wood:  { color: 0x6b4423 },
-    leaves:{ color: 0x2f8f4e }
-  };
-  const HOTBAR = ['grass', 'dirt', 'stone', 'wood', 'leaves'];
-  let selectedIndex = 0;
-
-  // ---------- Renderer / Scene ----------
-  const canvas = document.getElementById('c');
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x87ceeb);
-  scene.fog = new THREE.Fog(0x87ceeb, 30, 90);
-
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 300);
-
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x4a4a3a, 0.9);
-  scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-  sun.position.set(40, 60, 20);
-  scene.add(sun);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.25));
-
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-
-  // ---------- World data ----------
-  // key "x,y,z" -> type string
-  const blocks = new Map();
-  const key = (x, y, z) => x + ',' + y + ',' + z;
-  const getBlock = (x, y, z) => blocks.get(key(x, y, z));
-  const isSolid = (x, y, z) => blocks.has(key(x, y, z));
-
-  function setBlock(x, y, z, type) {
-    if (type === null) blocks.delete(key(x, y, z));
-    else blocks.set(key(x, y, z), type);
-  }
-
-  // simple deterministic pseudo-noise (no deps)
-  function heightAt(x, z) {
-    const n =
-      Math.sin(x * 0.11) * 2.2 +
-      Math.cos(z * 0.13) * 2.2 +
-      Math.sin((x + z) * 0.06) * 3.0 +
-      Math.cos((x - z) * 0.09) * 1.4;
-    return Math.max(2, Math.floor(6 + n));
-  }
-
-  function generateWorld() {
-    const treeSpots = [];
-    for (let x = -WORLD_HALF; x < WORLD_HALF; x++) {
-      for (let z = -WORLD_HALF; z < WORLD_HALF; z++) {
-        const h = heightAt(x, z);
-        for (let y = 0; y <= h; y++) {
-          let type;
-          if (y === h) type = 'grass';
-          else if (y >= h - 3) type = 'dirt';
-          else type = 'stone';
-          setBlock(x, y, z, type);
-        }
-        // sparse tree placement
-        if (h < MAX_HEIGHT - 3 && Math.abs(x) > 2 && Math.abs(z) > 2) {
-          const rnd = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
-          if (rnd > 0.965) treeSpots.push([x, h + 1, z]);
-        }
-      }
-    }
-    for (const [x, y, z] of treeSpots) placeTree(x, y, z);
-  }
-
-  function placeTree(x, y, z) {
-    const trunkH = 3 + (Math.abs(x * 7 + z * 3) % 2);
-    for (let i = 0; i < trunkH; i++) setBlock(x, y + i, z, 'wood');
-    const top = y + trunkH;
-    for (let dx = -2; dx <= 2; dx++) {
-      for (let dz = -2; dz <= 2; dz++) {
-        for (let dy = -1; dy <= 1; dy++) {
-          if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
-          if (isSolid(x + dx, top + dy, z + dz)) continue;
-          if (dx === 0 && dz === 0 && dy <= 0) continue;
-          setBlock(x + dx, top + dy, z + dz, 'leaves');
-        }
-      }
-    }
-    setBlock(x, top + 2, z, 'leaves');
-  }
-
-  generateWorld();
-
-  // ---------- Instanced mesh rendering ----------
-  const geometry = new THREE.BoxGeometry(BLOCK, BLOCK, BLOCK);
-  const materials = {};
-  for (const t in BLOCK_TYPES) {
-    materials[t] = new THREE.MeshLambertMaterial({ color: BLOCK_TYPES[t].color });
-  }
-  const meshes = {}; // type -> InstancedMesh
-  const meshGroup = new THREE.Group();
-  scene.add(meshGroup);
-
-  const dummy = new THREE.Object3D();
-  let needsRebuild = true;
-
-  function neighborsAllSolid(x, y, z) {
-    return isSolid(x + 1, y, z) && isSolid(x - 1, y, z) &&
-           isSolid(x, y + 1, z) && isSolid(x, y - 1, z) &&
-           isSolid(x, y, z + 1) && isSolid(x, y, z - 1);
-  }
-
-  function rebuildMeshes() {
-    // clear old
-    for (const t in meshes) {
-      meshGroup.remove(meshes[t]);
-      meshes[t].dispose && meshes[t].geometry.dispose();
-    }
-    for (const key in meshes) delete meshes[key];
-
-    const grouped = {};
-    for (const t in BLOCK_TYPES) grouped[t] = [];
-
-    for (const [k, type] of blocks) {
-      const [x, y, z] = k.split(',').map(Number);
-      if (neighborsAllSolid(x, y, z)) continue; // hidden block, skip
-      grouped[type].push([x, y, z]);
-    }
-
-    for (const t in grouped) {
-      const list = grouped[t];
-      if (list.length === 0) continue;
-      const mesh = new THREE.InstancedMesh(geometry, materials[t], list.length);
-      for (let i = 0; i < list.length; i++) {
-        dummy.position.set(list[i][0], list[i][1], list[i][2]);
-        dummy.updateMatrix();
-        mesh.setMatrixAt(i, dummy.matrix);
-      }
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.userData.type = t;
-      mesh.userData.coords = list;
-      meshGroup.add(mesh);
-      meshes[t] = mesh;
-    }
-    needsRebuild = false;
-  }
-
-  // ---------- Player ----------
-  const player = {
-    pos: new THREE.Vector3(0, MAX_HEIGHT + 2, 0),
-    vel: new THREE.Vector3(0, 0, 0),
-    yaw: 0,
-    pitch: 0,
-    grounded: false
-  };
-
-  // place player on top of terrain at start
-  (function placePlayerStart() {
-    const h = heightAt(0, 0);
-    player.pos.set(0.5, h + 3, 0.5);
-  })();
-
-  camera.rotation.order = 'YXZ';
-
-  // ---------- Input ----------
-  const keys = {};
-  document.addEventListener('keydown', (e) => {
-    keys[e.code] = true;
-    const num = parseInt(e.key);
-    if (num >= 1 && num <= 5) selectSlot(num - 1);
-  });
-  document.addEventListener('keyup', (e) => keys[e.code] = false);
-
-  const overlay = document.getElementById('overlay');
-  overlay.addEventListener('click', () => canvas.requestPointerLock());
-
-  document.addEventListener('pointerlockchange', () => {
-    overlay.style.display = document.pointerLockElement === canvas ? 'none' : 'flex';
-  });
-
-  const MOUSE_SENS = 0.0022;
-  document.addEventListener('mousemove', (e) => {
-    if (document.pointerLockElement !== canvas) return;
-    player.yaw -= e.movementX * MOUSE_SENS;
-    player.pitch -= e.movementY * MOUSE_SENS;
-    const limit = Math.PI / 2 - 0.01;
-    player.pitch = Math.max(-limit, Math.min(limit, player.pitch));
-  });
-
-  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  canvas.addEventListener('mousedown', (e) => {
-    if (document.pointerLockElement !== canvas) return;
-    if (e.button === 0) tryDestroy();
-    if (e.button === 2) tryPlace();
-  });
-
-  // ---------- Hotbar UI ----------
-  const hotbarEl = document.getElementById('hotbar');
-  HOTBAR.forEach((type, i) => {
-    const slot = document.createElement('div');
-    slot.className = 'slot' + (i === 0 ? ' active' : '');
-    slot.innerHTML = `<span class="num">${i + 1}</span><div class="swatch" style="background:#${BLOCK_TYPES[type].color.toString(16).padStart(6, '0')}"></div>`;
-    slot.addEventListener('click', () => selectSlot(i));
-    hotbarEl.appendChild(slot);
-  });
-  function selectSlot(i) {
-    selectedIndex = i;
-    document.querySelectorAll('.slot').forEach((el, idx) => el.classList.toggle('active', idx === i));
-  }
-
-  // ---------- Raycasting (voxel marching) ----------
-  const raycaster = new THREE.Raycaster();
-  let targetBlock = null;   // [x,y,z] of block being looked at
-  let placeAt = null;       // [x,y,z] where a new block would go
-
-  const selectionBox = new THREE.LineSegments(
-    new THREE.EdgesGeometry(new THREE.BoxGeometry(1.02, 1.02, 1.02)),
-    new THREE.LineBasicMaterial({ color: 0x000000 })
-  );
-  selectionBox.visible = false;
-  scene.add(selectionBox);
-
-  function updateTargetBlock() {
-    const dir = new THREE.Vector3();
-    camera.getWorldDirection(dir);
-    const origin = camera.position.clone();
-
-    let lastEmpty = null;
-    targetBlock = null;
-    for (let t = 0; t < REACH; t += 0.05) {
-      const p = origin.clone().addScaledVector(dir, t);
-      const bx = Math.floor(p.x + 0.5);
-      const by = Math.floor(p.y + 0.5);
-      const bz = Math.floor(p.z + 0.5);
-      if (isSolid(bx, by, bz)) {
-        targetBlock = [bx, by, bz];
-        placeAt = lastEmpty;
-        break;
-      }
-      lastEmpty = [bx, by, bz];
-    }
-
-    if (targetBlock) {
-      selectionBox.position.set(targetBlock[0], targetBlock[1], targetBlock[2]);
-      selectionBox.visible = true;
-    } else {
-      selectionBox.visible = false;
-    }
-  }
-
-  function tryDestroy() {
-    if (!targetBlock) return;
-    setBlock(targetBlock[0], targetBlock[1], targetBlock[2], null);
-    needsRebuild = true;
-  }
-
-  function tryPlace() {
-    if (!targetBlock || !placeAt) return;
-    const [px, py, pz] = placeAt;
-    // don't place inside the player
-    const feet = player.pos.clone();
-    const overlapsPlayer =
-      Math.abs(px - Math.floor(feet.x + 0.5)) < 1 &&
-      Math.abs(pz - Math.floor(feet.z + 0.5)) < 1 &&
-      (py === Math.floor(feet.y - 0.5) || py === Math.floor(feet.y + 0.5) || py === Math.floor(feet.y + 1.5));
-    if (overlapsPlayer) return;
-    setBlock(px, py, pz, HOTBAR[selectedIndex]);
-    needsRebuild = true;
-  }
-
-  // ---------- Physics / movement ----------
-  function collidesAt(x, y, z) {
-    // check a small box around the point against solid blocks
-    const minX = Math.floor(x - PLAYER_RADIUS + 0.5);
-    const maxX = Math.floor(x + PLAYER_RADIUS + 0.5);
-    const minZ = Math.floor(z - PLAYER_RADIUS + 0.5);
-    const maxZ = Math.floor(z + PLAYER_RADIUS + 0.5);
-    const by = Math.floor(y + 0.5);
-    for (let bx = minX; bx <= maxX; bx++) {
-      for (let bz = minZ; bz <= maxZ; bz++) {
-        if (isSolid(bx, by, bz)) return true;
-      }
-    }
-    return false;
-  }
-
-  function updatePlayer(dt) {
-    const forward = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw));
-    const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
-
-    let moveX = 0, moveZ = 0;
-    if (keys['KeyW']) { moveX -= forward.x; moveZ -= forward.z; }
-    if (keys['KeyS']) { moveX += forward.x; moveZ += forward.z; }
-    if (keys['KeyA']) { moveX -= right.x; moveZ -= right.z; }
-    if (keys['KeyD']) { moveX += right.x; moveZ += right.z; }
-
-    const len = Math.hypot(moveX, moveZ);
-    if (len > 0) { moveX /= len; moveZ /= len; }
-
-    const dx = moveX * MOVE_SPEED * dt;
-    const dz = moveZ * MOVE_SPEED * dt;
-
-    // move on X
-    const feetY = player.pos.y - EYE_HEIGHT + 0.1;
-    const headY = player.pos.y - EYE_HEIGHT + 1.6;
-    if (!collidesAt(player.pos.x + dx, feetY, player.pos.z) && !collidesAt(player.pos.x + dx, headY, player.pos.z)) {
-      player.pos.x += dx;
-    }
-    if (!collidesAt(player.pos.x, feetY, player.pos.z + dz) && !collidesAt(player.pos.x, headY, player.pos.z + dz)) {
-      player.pos.z += dz;
-    }
-
-    // gravity
-    player.vel.y += GRAVITY * dt;
-    if (player.grounded && keys['Space']) {
-      player.vel.y = JUMP_SPEED;
-      player.grounded = false;
-    }
-
-    const newY = player.pos.y + player.vel.y * dt;
-    const feetCheckY = newY - EYE_HEIGHT;
-
-    if (player.vel.y < 0) {
-      if (collidesAt(player.pos.x, feetCheckY, player.pos.z)) {
-        player.pos.y = Math.floor(feetCheckY + 0.5) + 0.5 + EYE_HEIGHT;
-        player.vel.y = 0;
-        player.grounded = true;
-      } else {
-        player.pos.y = newY;
-        player.grounded = false;
-      }
-    } else {
-      const headCheckY = newY - EYE_HEIGHT + 1.7;
-      if (collidesAt(player.pos.x, headCheckY, player.pos.z)) {
-        player.vel.y = 0;
-      } else {
-        player.pos.y = newY;
-      }
-    }
-
-    // safety floor
-    if (player.pos.y < -20) {
-      player.pos.set(0.5, MAX_HEIGHT + 5, 0.5);
-      player.vel.set(0, 0, 0);
-    }
-
-    camera.position.copy(player.pos);
-    camera.rotation.y = player.yaw;
-    camera.rotation.x = player.pitch;
-  }
-
-  // ---------- Main loop ----------
-  let lastTime = performance.now();
-  let frames = 0, fpsTimer = 0;
-  const fpsEl = document.getElementById('fps');
-
-  function animate() {
-    requestAnimationFrame(animate);
-    const now = performance.now();
-    const dt = Math.min(0.05, (now - lastTime) / 1000);
-    lastTime = now;
-
-    if (document.pointerLockElement === canvas) {
-      updatePlayer(dt);
-    }
-
-    if (needsRebuild) rebuildMeshes();
-    updateTargetBlock();
-
-    renderer.render(scene, camera);
-
-    frames++; fpsTimer += dt;
-    if (fpsTimer >= 0.5) {
-      fpsEl.textContent = Math.round(frames / fpsTimer) + ' fps';
-      frames = 0; fpsTimer = 0;
-    }
-  }
-
-  rebuildMeshes();
-  animate();
-})();
-</script>
+<script type="module" src="src/main.js"></script>
 </body>
 </html>

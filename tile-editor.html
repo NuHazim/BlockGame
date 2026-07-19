@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Block Tile Editor</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: #1b1d22; color: #eee;
+    font-family: 'Segoe UI', Arial, sans-serif; display: flex; flex-wrap: wrap; gap: 28px;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 16px; color: #9aa; font-size: 13px; }
+  .panel {
+    background: #24262c; border-radius: 10px; padding: 16px; min-width: 260px;
+  }
+  #gridCanvas {
+    image-rendering: pixelated; border: 2px solid #444; cursor: crosshair;
+    background:
+      linear-gradient(45deg, #3a3a3a 25%, transparent 25%),
+      linear-gradient(-45deg, #3a3a3a 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #3a3a3a 75%),
+      linear-gradient(-45deg, transparent 75%, #3a3a3a 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  }
+  .palette { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .swatch {
+    width: 26px; height: 26px; border-radius: 5px; cursor: pointer; border: 2px solid transparent;
+  }
+  .swatch.active { border-color: #fff; }
+  label { font-size: 12px; color: #aab; display: block; margin: 10px 0 4px; }
+  input[type=text], select {
+    width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid #444;
+    background: #1b1d22; color: #eee; font-size: 13px;
+  }
+  button {
+    background: #3d7bfd; color: #fff; border: none; border-radius: 6px;
+    padding: 8px 14px; font-size: 13px; cursor: pointer; margin-top: 8px; margin-right: 6px;
+  }
+  button.secondary { background: #3a3d46; }
+  button:hover { filter: brightness(1.1); }
+  textarea {
+    width: 100%; height: 220px; background: #14151a; color: #b6f2c1; border: 1px solid #444;
+    border-radius: 6px; padding: 10px; font-family: 'Consolas', monospace; font-size: 12px; resize: vertical;
+  }
+  .previewRow { display: flex; gap: 16px; align-items: center; margin-top: 10px; }
+  .previewBox canvas { image-rendering: pixelated; border: 1px solid #444; border-radius: 4px; }
+  .previewLabel { font-size: 11px; color: #9aa; text-align: center; margin-top: 4px; }
+  #dropZone {
+    border: 2px dashed #444; border-radius: 8px; padding: 14px; text-align: center;
+    font-size: 12px; color: #99a; margin-top: 10px; cursor: pointer;
+  }
+  #dropZone.drag { border-color: #3d7bfd; color: #cdd; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+</style>
+</head>
+<body>
+
+<div class="panel">
+  <h1>Tile Editor</h1>
+  <p class="sub">Draw a 16×16 block texture, or drag a PNG onto it.</p>
+  <canvas id="gridCanvas" width="384" height="384"></canvas>
+
+  <div class="palette" id="palette"></div>
+  <div class="row">
+    <input type="color" id="customColor" value="#5aa93b" style="height:34px;">
+    <button class="secondary" id="eraseBtn">Eraser</button>
+  </div>
+  <div class="row">
+    <button class="secondary" id="clearBtn">Clear</button>
+    <button class="secondary" id="fillBtn">Fill all</button>
+  </div>
+
+  <div id="dropZone">Drop a 16×16 (or any size) PNG here to import it</div>
+  <input type="file" id="fileInput" accept="image/*" style="display:none;">
+</div>
+
+<div class="panel" style="max-width:340px;">
+  <h1>Live Preview</h1>
+  <p class="sub">How it actually looks at in-game pixel scale.</p>
+  <div class="previewRow">
+    <div class="previewBox">
+      <canvas id="prevSmall" width="16" height="16"></canvas>
+      <div class="previewLabel">1:1 (game size)</div>
+    </div>
+    <div class="previewBox">
+      <canvas id="prevMed" width="64" height="64"></canvas>
+      <div class="previewLabel">4x</div>
+    </div>
+    <div class="previewBox">
+      <canvas id="prevTiled" width="96" height="96"></canvas>
+      <div class="previewLabel">tiled 3x3</div>
+    </div>
+  </div>
+
+  <label for="tileName">Tile name (used in TILE_PAINTERS)</label>
+  <input type="text" id="tileName" value="myBlock">
+
+  <button id="exportProcBtn">Export as paint function</button>
+  <button id="exportPixelsBtn" class="secondary">Export as pixel array</button>
+
+  <label style="margin-top:14px;">Paste this into your game's script</label>
+  <textarea id="output" readonly placeholder="Click an export button above..."></textarea>
+  <button id="copyBtn" class="secondary">Copy to clipboard</button>
+</div>
+
+<script>
+(() => {
+  const SIZE = 16;
+  const CELL = 384 / SIZE; // on-screen pixel size per grid cell
+
+  const grid = new Array(SIZE * SIZE).fill(null); // null = transparent, else '#rrggbb'
+
+  const gridCanvas = document.getElementById('gridCanvas');
+  const gctx = gridCanvas.getContext('2d');
+
+  const PRESET_COLORS = [
+    '#5aa93b', '#8a5a34', '#8a8a8e', '#6b4423', '#2f8f4e',
+    '#dbc98a', '#b98950', '#c94f4f', '#4f7fc9', '#e8e8e8',
+    '#2b2b2b', '#f2d94e'
+  ];
+
+  let currentColor = PRESET_COLORS[0];
+  let erasing = false;
+
+  // ---------- palette ----------
+  const paletteEl = document.getElementById('palette');
+  function buildPalette() {
+    paletteEl.innerHTML = '';
+    PRESET_COLORS.forEach(c => {
+      const sw = document.createElement('div');
+      sw.className = 'swatch' + (c === currentColor && !erasing ? ' active' : '');
+      sw.style.background = c;
+      sw.addEventListener('click', () => {
+        currentColor = c;
+        erasing = false;
+        document.getElementById('customColor').value = c;
+        buildPalette();
+      });
+      paletteEl.appendChild(sw);
+    });
+  }
+  buildPalette();
+
+  document.getElementById('customColor').addEventListener('input', (e) => {
+    currentColor = e.target.value;
+    erasing = false;
+    buildPalette();
+  });
+  document.getElementById('eraseBtn').addEventListener('click', () => {
+    erasing = true;
+  });
+
+  // ---------- drawing grid ----------
+  function drawGrid() {
+    gctx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+    for (let y = 0; y < SIZE; y++) {
+      for (let x = 0; x < SIZE; x++) {
+        const c = grid[y * SIZE + x];
+        if (c) {
+          gctx.fillStyle = c;
+          gctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+        }
+      }
+    }
+    // grid lines
+    gctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    for (let i = 0; i <= SIZE; i++) {
+      gctx.beginPath(); gctx.moveTo(i * CELL, 0); gctx.lineTo(i * CELL, 384); gctx.stroke();
+      gctx.beginPath(); gctx.moveTo(0, i * CELL); gctx.lineTo(384, i * CELL); gctx.stroke();
+    }
+    updatePreviews();
+  }
+
+  function cellAt(evt) {
+    const rect = gridCanvas.getBoundingClientRect();
+    const x = Math.floor((evt.clientX - rect.left) / (rect.width / SIZE));
+    const y = Math.floor((evt.clientY - rect.top) / (rect.height / SIZE));
+    return { x, y };
+  }
+
+  let painting = false;
+  function paintAt(evt) {
+    const { x, y } = cellAt(evt);
+    if (x < 0 || y < 0 || x >= SIZE || y >= SIZE) return;
+    grid[y * SIZE + x] = erasing ? null : currentColor;
+    drawGrid();
+  }
+  gridCanvas.addEventListener('mousedown', (e) => { painting = true; paintAt(e); });
+  window.addEventListener('mouseup', () => painting = false);
+  gridCanvas.addEventListener('mousemove', (e) => { if (painting) paintAt(e); });
+
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    grid.fill(null);
+    drawGrid();
+  });
+  document.getElementById('fillBtn').addEventListener('click', () => {
+    grid.fill(currentColor);
+    drawGrid();
+  });
+
+  // ---------- previews ----------
+  function updatePreviews() {
+    const small = document.getElementById('prevSmall').getContext('2d');
+    small.clearRect(0, 0, 16, 16);
+    for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
+      if (grid[y * SIZE + x]) { small.fillStyle = grid[y * SIZE + x]; small.fillRect(x, y, 1, 1); }
+    }
+
+    const med = document.getElementById('prevMed').getContext('2d');
+    med.imageSmoothingEnabled = false;
+    med.clearRect(0, 0, 64, 64);
+    med.drawImage(document.getElementById('prevSmall'), 0, 0, 64, 64);
+
+    const tiled = document.getElementById('prevTiled').getContext('2d');
+    tiled.imageSmoothingEnabled = false;
+    tiled.clearRect(0, 0, 96, 96);
+    for (let ty = 0; ty < 3; ty++) for (let tx = 0; tx < 3; tx++) {
+      tiled.drawImage(document.getElementById('prevSmall'), tx * 32, ty * 32, 32, 32);
+    }
+  }
+
+  // ---------- image import ----------
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  dropZone.addEventListener('click', () => fileInput.click());
+  ['dragover', 'dragleave', 'drop'].forEach(ev => {
+    dropZone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      dropZone.classList.toggle('drag', ev === 'dragover');
+    });
+  });
+  dropZone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer.files[0];
+    if (file) loadImageFile(file);
+  });
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files[0]) loadImageFile(e.target.files[0]);
+  });
+
+  function loadImageFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const tmp = document.createElement('canvas');
+        tmp.width = SIZE; tmp.height = SIZE;
+        const tctx = tmp.getContext('2d');
+        tctx.imageSmoothingEnabled = false;
+        tctx.drawImage(img, 0, 0, SIZE, SIZE);
+        const data = tctx.getImageData(0, 0, SIZE, SIZE).data;
+        for (let i = 0; i < SIZE * SIZE; i++) {
+          const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2], a = data[i * 4 + 3];
+          grid[i] = a < 10 ? null : '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+        }
+        drawGrid();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ---------- export ----------
+  const output = document.getElementById('output');
+
+  document.getElementById('exportPixelsBtn').addEventListener('click', () => {
+    const name = document.getElementById('tileName').value.trim() || 'myBlock';
+    const rows = [];
+    for (let y = 0; y < SIZE; y++) {
+      const row = [];
+      for (let x = 0; x < SIZE; x++) row.push(JSON.stringify(grid[y * SIZE + x]));
+      rows.push('    [' + row.join(',') + ']');
+    }
+    output.value =
+`// paste into TILE_PAINTERS = { ... }
+${name}: (ctx, x0, y0, size) => {
+  const PIXELS = [
+${rows.join(',\n')}
+  ];
+  const scale = size / ${SIZE};
+  for (let y = 0; y < ${SIZE}; y++) {
+    for (let x = 0; x < ${SIZE}; x++) {
+      const c = PIXELS[y][x];
+      if (!c) continue;
+      ctx.fillStyle = c;
+      ctx.fillRect(x0 + x * scale, y0 + y * scale, scale, scale);
+    }
+  }
+},
+
+// and register the block type itself, e.g.:
+// ${name}Block: { color: 0x888888, faces: { all: '${name}' } }`;
+  });
+
+  document.getElementById('exportProcBtn').addEventListener('click', () => {
+    const name = document.getElementById('tileName').value.trim() || 'myBlock';
+    output.value =
+`// This is a hand-drawn tile, so "procedural" export is just the pixel
+// version dressed as a one-liner call. Use "Export as pixel array" instead
+// for hand-drawn art -- procedural export is for tiles you want to
+// generate with math (like paintSpeckle/paintWoodRings in the main game).
+// Example of a procedural tile for reference:
+${name}: (ctx, x, y, s) => paintSpeckle(ctx, x, y, s, 0x888888, 16),`;
+  });
+
+  document.getElementById('copyBtn').addEventListener('click', () => {
+    output.select();
+    document.execCommand('copy');
+  });
+
+  // seed with a simple default pattern so it's not empty on load
+  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
+    grid[y * SIZE + x] = (x + y) % 5 === 0 ? '#4a8a2e' : '#5aa93b';
+  }
+  drawGrid();
+})();
+</script>
+</body>
+</html>
