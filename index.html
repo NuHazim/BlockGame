@@ -80,6 +80,40 @@
     transition: background 0.12s, border-color 0.12s;
   }
   .picker-cell:hover { background: rgba(255,255,255,0.24); border-color: #fff; }
+  .picker-cell .swatch { width: 40px; height: 40px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.4); }
+  #blockPicker .hint { margin-top: 16px; font-size: 13px; opacity: 0.7; }
+
+  #modeLabel {
+    position: fixed; top: 40px; right: 14px; color: #fff; z-index: 10; font-size: 12px; opacity: 0.75;
+  }
+
+  #healthBar {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+    width: 220px; height: 14px; background: rgba(20,20,20,0.55);
+    border: 2px solid rgba(255,255,255,0.3); border-radius: 7px;
+    overflow: hidden; z-index: 10; display: none;
+  }
+  #healthFill {
+    height: 100%; width: 100%; background: linear-gradient(90deg, #d32f2f, #f66);
+    transition: width 0.15s;
+  }
+
+  #blockPicker {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.65); color: #fff;
+    display: none; align-items: center; justify-content: center; flex-direction: column;
+    z-index: 25; text-align: center;
+  }
+  #blockPicker h1 { margin: 0 0 14px; font-size: 26px; }
+  #pickerGrid {
+    display: grid; grid-template-columns: repeat(5, 64px); gap: 10px;
+  }
+  .picker-cell {
+    width: 64px; height: 64px; background: rgba(255,255,255,0.12);
+    border: 2px solid rgba(255,255,255,0.35); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .picker-cell:hover { background: rgba(255,255,255,0.24); border-color: #fff; }
   .picker-cell .swatch {
     width: 40px; height: 40px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.4);
     background-size: cover; image-rendering: pixelated; image-rendering: crisp-edges;
@@ -217,15 +251,6 @@
     100% { opacity: 0; }
   }
 
-  /* Blue submersion tint, toggled on/off by main.js based on player.inWater
-     -- gives the classic Minecraft "screen goes blue underwater" look to
-     complement the translucent water blocks themselves. */
-  #underwaterOverlay {
-    position: fixed; inset: 0; pointer-events: none; z-index: 8;
-    background: linear-gradient(rgba(50,110,200,0.14), rgba(30,80,170,0.22));
-    opacity: 0; transition: opacity 0.4s ease;
-  }
-
   .menu-btn {
     margin: 6px 0; padding: 10px 28px; min-width: 200px;
     font-size: 15px; font-family: inherit; color: #fff; cursor: pointer;
@@ -247,47 +272,15 @@
 <canvas id="c"></canvas>
 <div id="crosshair"></div>
 <div id="fps"></div>
-<div id="underwaterOverlay"></div>
 <div id="damageFlash"></div>
 <div id="modeLabel"></div>
 <div id="healthBar"><div id="healthFill"></div></div>
 <div id="hotbar"></div>
-<div id="itemTooltip"></div>
 <div id="blockPicker">
   <h1>Select Block</h1>
   <div id="pickerGrid"></div>
   <p class="hint">Click a block to assign it to the selected slot &middot; B or Esc to close</p>
 </div>
-<div id="craftingOverlay" class="craft-overlay">
-  <button class="craft-close" id="craftClosePersonal" title="Close">&times;</button>
-  <h1>Crafting</h1>
-  <div class="craft-area">
-    <div class="craft-grid" id="craftGridPersonal"></div>
-    <div class="craft-arrow">&rarr;</div>
-    <div class="craft-output" id="craftOutputPersonal"></div>
-  </div>
-  <div class="craft-palette" id="craftPalettePersonal"></div>
-  <p class="hint">Left-click a slot to pick up/place/merge &middot; click a held material again to drop it &middot; right-click to split/place-one &middot; click the output to craft (Shift+click to craft all)</p>
-  <button class="menu-btn" id="craftRecipesBtnPersonal" style="margin-top:10px;">Show Recipes</button>
-  <div class="recipe-book" id="craftRecipeBookPersonal"></div>
-</div>
-
-<div id="craftingTableOverlay" class="craft-overlay">
-  <button class="craft-close" id="craftCloseTable" title="Close">&times;</button>
-  <h1>Crafting Table</h1>
-  <div class="craft-area">
-    <div class="craft-grid" id="craftGridTable"></div>
-    <div class="craft-arrow">&rarr;</div>
-    <div class="craft-output" id="craftOutputTable"></div>
-  </div>
-  <div class="craft-palette" id="craftPaletteTable"></div>
-  <p class="hint">Left-click a slot to pick up/place/merge &middot; click a held material again to drop it &middot; right-click to split/place-one &middot; click the output to craft (Shift+click to craft all)</p>
-  <button class="menu-btn" id="craftRecipesBtnTable" style="margin-top:10px;">Show Recipes</button>
-  <div class="recipe-book" id="craftRecipeBookTable"></div>
-</div>
-
-<div id="craftCursor"></div>
-
 <div id="overlay">
   <div id="menuButtons">
     <h1 id="menuTitle">Block World</h1>
@@ -302,16 +295,11 @@
     <table>
       <tr><td class="key">WASD</td><td>Move</td></tr>
       <tr><td class="key">Mouse</td><td>Look around</td></tr>
-      <tr><td class="key">Space</td><td>Jump / swim up / fly up</td></tr>
-      <tr><td class="key">Double-tap W</td><td>Swim sprint (while in water)</td></tr>
-      <tr><td class="key">Double-tap Space</td><td>Toggle flight (Creative only)</td></tr>
-      <tr><td class="key">Shift</td><td>Sneak (on ground) &middot; fly down (while flying)</td></tr>
-      <tr><td class="key">Hold left click</td><td>Destroy block</td></tr>
+      <tr><td class="key">Space</td><td>Jump</td></tr>
+      <tr><td class="key">Left click</td><td>Destroy block</td></tr>
       <tr><td class="key">Right click</td><td>Place block</td></tr>
-      <tr><td class="key">1 – 9</td><td>Select block type</td></tr>
+      <tr><td class="key">1 – 5</td><td>Select block type</td></tr>
       <tr><td class="key">B</td><td>Open block picker</td></tr>
-      <tr><td class="key">E</td><td>Open crafting (2&times;2)</td></tr>
-      <tr><td class="key">Right-click table</td><td>Open crafting table (3&times;3)</td></tr>
       <tr><td class="key">C</td><td>Toggle Creative / Survival</td></tr>
       <tr><td class="key">Esc</td><td>Pause / menu</td></tr>
     </table>
@@ -320,6 +308,791 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script type="module" src="src/main.js"></script>
+<script>
+(() => {
+  // ---------- Config ----------
+  const WORLD_SIZE = 48;          // world is WORLD_SIZE x WORLD_SIZE columns
+  const WORLD_HALF = WORLD_SIZE / 2;
+  const MAX_HEIGHT = 14;
+  const BLOCK = 1;                // block size
+  const GRAVITY = -22;
+  const JUMP_SPEED = 8.2;
+  const MOVE_SPEED = 6.0;
+  const PLAYER_RADIUS = 0.32;
+  const EYE_HEIGHT = 1.62;
+  const PLAYER_HEIGHT = 1.8;      // full body height (feet to head)
+  const REACH = 7;
+
+  const BLOCK_TYPES = {
+    grass: { color: 0x5aa93b },
+    dirt:  { color: 0x8a5a34 },
+    stone: { color: 0x8a8a8e },
+    wood:  { color: 0x6b4423 },
+    leaves:{ color: 0x2f8f4e }
+  };
+  const HOTBAR = ['grass', 'dirt', 'stone', 'wood', 'leaves'];
+  let selectedIndex = 0;
+
+  // ---------- Inventory ----------
+  // per-type owned quantity, only consulted when creative is off
+  const inventory = {};
+  for (const t in BLOCK_TYPES) inventory[t] = 0;
+  let creative = true; // default ON so the game is fun to test immediately
+
+  // ---------- Renderer / Scene ----------
+  const canvas = document.getElementById('c');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87ceeb);
+  scene.fog = new THREE.Fog(0x87ceeb, 30, 90);
+
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 300);
+
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x4a4a3a, 0.9);
+  scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+  sun.position.set(40, 60, 20);
+  scene.add(sun);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // ---------- World data ----------
+  // key "x,y,z" -> type string
+  const blocks = new Map();
+  const key = (x, y, z) => x + ',' + y + ',' + z;
+  const getBlock = (x, y, z) => blocks.get(key(x, y, z));
+  const isSolid = (x, y, z) => blocks.has(key(x, y, z));
+
+  function setBlock(x, y, z, type) {
+    if (type === null) blocks.delete(key(x, y, z));
+    else blocks.set(key(x, y, z), type);
+  }
+
+  // world seed shifts the noise so each "Regenerate" produces a new landscape
+  let worldSeed = 0;
+
+  // simple deterministic pseudo-noise (no deps)
+  function heightAt(x, z) {
+    const s = worldSeed;
+    const n =
+      Math.sin((x + s) * 0.11) * 2.2 +
+      Math.cos((z - s) * 0.13) * 2.2 +
+      Math.sin((x + z + s) * 0.06) * 3.0 +
+      Math.cos((x - z + s) * 0.09) * 1.4;
+    return Math.max(2, Math.floor(6 + n));
+  }
+
+  function generateWorld() {
+    const treeSpots = [];
+    for (let x = -WORLD_HALF; x < WORLD_HALF; x++) {
+      for (let z = -WORLD_HALF; z < WORLD_HALF; z++) {
+        const h = heightAt(x, z);
+        for (let y = 0; y <= h; y++) {
+          let type;
+          if (y === h) type = 'grass';
+          else if (y >= h - 3) type = 'dirt';
+          else type = 'stone';
+          setBlock(x, y, z, type);
+        }
+        // sparse tree placement
+        if (h < MAX_HEIGHT - 3 && Math.abs(x) > 2 && Math.abs(z) > 2) {
+          const rnd = Math.abs(Math.sin((x + worldSeed) * 12.9898 + z * 78.233) * 43758.5453) % 1;
+          if (rnd > 0.965) treeSpots.push([x, h + 1, z]);
+        }
+      }
+    }
+    for (const [x, y, z] of treeSpots) placeTree(x, y, z);
+  }
+
+  function placeTree(x, y, z) {
+    const trunkH = 3 + (Math.abs(x * 7 + z * 3) % 2);
+    for (let i = 0; i < trunkH; i++) setBlock(x, y + i, z, 'wood');
+    const top = y + trunkH;
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dz = -2; dz <= 2; dz++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
+          if (isSolid(x + dx, top + dy, z + dz)) continue;
+          if (dx === 0 && dz === 0 && dy <= 0) continue;
+          setBlock(x + dx, top + dy, z + dz, 'leaves');
+        }
+      }
+    }
+    setBlock(x, top + 2, z, 'leaves');
+  }
+
+  generateWorld();
+
+  // ---------- Instanced mesh rendering ----------
+  const geometry = new THREE.BoxGeometry(BLOCK, BLOCK, BLOCK);
+  // Bake fake directional lighting into vertex colors so each cube face reads
+  // as a distinct plane: top brightest, sides mid, bottom darkest. BoxGeometry
+  // face order is +X, -X, +Y, -Y, +Z, -Z (4 verts each = 24 total).
+  (function bakeFaceShading() {
+    const FACE_BRIGHTNESS = [
+      0.86, // +X  right
+      0.72, // -X  left
+      1.00, // +Y  top
+      0.55, // -Y  bottom
+      0.80, // +Z  front
+      0.66  // -Z  back
+    ];
+    const count = geometry.attributes.position.count; // 24
+    const colors = new Float32Array(count * 3);
+    for (let f = 0; f < 6; f++) {
+      const b = FACE_BRIGHTNESS[f];
+      for (let v = 0; v < 4; v++) {
+        const i = (f * 4 + v) * 3;
+        colors[i] = b; colors[i + 1] = b; colors[i + 2] = b;
+      }
+    }
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  })();
+
+  const materials = {};
+  for (const t in BLOCK_TYPES) {
+    // unlit: the baked vertex-color brightness IS the shading; base color tints it
+    materials[t] = new THREE.MeshBasicMaterial({
+      color: BLOCK_TYPES[t].color,
+      vertexColors: true
+    });
+  }
+  const meshes = {}; // type -> InstancedMesh
+  const meshGroup = new THREE.Group();
+  scene.add(meshGroup);
+
+  // ---------- Item drops (survival-mode block pickups) ----------
+  // small floating cubes spawned where a block was broken in survival mode;
+  // walking near one collects it into the inventory. Creative mode never
+  // spawns these — blocks there just vanish, as before.
+  const dropGeometry = new THREE.BoxGeometry(0.35, 0.35, 0.35);
+  const dropMaterials = {};
+  for (const t in BLOCK_TYPES) {
+    dropMaterials[t] = new THREE.MeshBasicMaterial({ color: BLOCK_TYPES[t].color });
+  }
+  const drops = []; // { mesh, type, count, baseY, phase }
+  const PICKUP_RADIUS = 1.1;
+  const STACK_RADIUS = 1.6; // drops of the same type this close merge into one stack
+
+  function spawnDrop(x, y, z, type) {
+    // merge into a nearby stack of the same type instead of piling up meshes
+    for (const d of drops) {
+      if (d.type !== type) continue;
+      const dx = d.mesh.position.x - x, dz = d.mesh.position.z - z, dy = d.baseY - y;
+      if (dx * dx + dy * dy + dz * dz < STACK_RADIUS * STACK_RADIUS) {
+        d.count++;
+        const scale = Math.min(1.6, 1 + d.count * 0.08);
+        d.mesh.scale.setScalar(scale);
+        return;
+      }
+    }
+    const mesh = new THREE.Mesh(dropGeometry, dropMaterials[type]);
+    mesh.position.set(x + (Math.random() - 0.5) * 0.3, y, z + (Math.random() - 0.5) * 0.3);
+    scene.add(mesh);
+    drops.push({ mesh, type, count: 1, baseY: y, phase: Math.random() * Math.PI * 2 });
+  }
+
+  // ---------- Break particles (purely cosmetic, both modes) ----------
+  const particleGeometry = new THREE.BoxGeometry(0.12, 0.12, 0.12);
+  const particles = []; // { mesh, vel, life, maxLife }
+
+  function spawnParticles(x, y, z, type) {
+    const n = 6 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: BLOCK_TYPES[type].color, transparent: true, opacity: 1
+      });
+      const mesh = new THREE.Mesh(particleGeometry, mat);
+      mesh.position.set(x, y, z);
+      scene.add(mesh);
+      const vel = new THREE.Vector3(
+        (Math.random() - 0.5) * 3,
+        Math.random() * 3 + 1,
+        (Math.random() - 0.5) * 3
+      );
+      particles.push({ mesh, vel, life: 0, maxLife: 0.35 + Math.random() * 0.2 });
+    }
+  }
+
+  function updateParticles(dt) {
+    if (particles.length === 0) return;
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life += dt;
+      if (p.life >= p.maxLife) {
+        scene.remove(p.mesh);
+        p.mesh.material.dispose();
+        particles.splice(i, 1);
+        continue;
+      }
+      p.vel.y += GRAVITY * 0.4 * dt; // lighter than player gravity, floatier puff
+      p.mesh.position.addScaledVector(p.vel, dt);
+      const t = p.life / p.maxLife;
+      p.mesh.material.opacity = 1 - t;
+      p.mesh.scale.setScalar(1 - t * 0.6);
+    }
+  }
+
+  function updateDrops(dt, nowSec) {
+    if (drops.length === 0) return;
+    // pickup point roughly at the player's feet+torso, not the eye
+    const feetY = player.pos.y - EYE_HEIGHT;
+    for (let i = drops.length - 1; i >= 0; i--) {
+      const d = drops[i];
+      d.mesh.position.y = d.baseY + Math.sin(nowSec * 2 + d.phase) * 0.12;
+      d.mesh.rotation.y += dt * 1.6;
+      const dx = d.mesh.position.x - player.pos.x;
+      const dz = d.mesh.position.z - player.pos.z;
+      const dy = d.baseY - (feetY + 0.9);
+      if (dx * dx + dy * dy + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS) {
+        scene.remove(d.mesh);
+        drops.splice(i, 1);
+        inventory[d.type] += d.count;
+        updateHotbarUI();
+      }
+    }
+  }
+
+  const dummy = new THREE.Object3D();
+  // types whose meshes need rebuilding this frame. null-initialized full set
+  // means "rebuild everything" (used for the first build / regenerate).
+  let dirtyTypes = new Set();
+
+  function neighborsAllSolid(x, y, z) {
+    return isSolid(x + 1, y, z) && isSolid(x - 1, y, z) &&
+           isSolid(x, y + 1, z) && isSolid(x, y - 1, z) &&
+           isSolid(x, y, z + 1) && isSolid(x, y, z - 1);
+  }
+
+  // Rebuild only the instanced meshes for the given types. Breaking/placing a
+  // block also exposes/hides neighbour faces, so callers must mark the touched
+  // block's type AND its 6 neighbours' types dirty (see markEditDirty).
+  function rebuildTypes(types) {
+    // collect visible instances per dirty type in one pass over the world
+    const grouped = {};
+    for (const t of types) grouped[t] = [];
+
+    for (const [k, type] of blocks) {
+      if (!grouped[type]) continue;              // type not dirty, skip
+      const [x, y, z] = k.split(',').map(Number);
+      if (neighborsAllSolid(x, y, z)) continue;  // fully hidden block
+      grouped[type].push([x, y, z]);
+    }
+
+    for (const t of types) {
+      // dispose the old mesh for this type, if any
+      if (meshes[t]) {
+        meshGroup.remove(meshes[t]);
+        delete meshes[t];
+      }
+      const list = grouped[t];
+      if (!list || list.length === 0) continue;
+      const mesh = new THREE.InstancedMesh(geometry, materials[t], list.length);
+      for (let i = 0; i < list.length; i++) {
+        dummy.position.set(list[i][0], list[i][1], list[i][2]);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.userData.type = t;
+      meshGroup.add(mesh);
+      meshes[t] = mesh;
+    }
+  }
+
+  function flushDirty() {
+    if (dirtyTypes.size === 0) return;
+    rebuildTypes(dirtyTypes);
+    dirtyTypes.clear();
+  }
+
+  // mark a block's own type plus every neighbour's type as needing a rebuild
+  function markEditDirty(x, y, z, ownType) {
+    if (ownType) dirtyTypes.add(ownType);
+    const nb = [
+      getBlock(x + 1, y, z), getBlock(x - 1, y, z),
+      getBlock(x, y + 1, z), getBlock(x, y - 1, z),
+      getBlock(x, y, z + 1), getBlock(x, y, z - 1)
+    ];
+    for (const t of nb) if (t) dirtyTypes.add(t);
+  }
+
+  // ---------- Player ----------
+  const MAX_HEALTH = 100;
+  const player = {
+    pos: new THREE.Vector3(0, MAX_HEIGHT + 2, 0),
+    vel: new THREE.Vector3(0, 0, 0),
+    yaw: 0,
+    pitch: 0,
+    grounded: false,
+    health: MAX_HEALTH
+  };
+
+  // place player on top of terrain at spawn
+  function placePlayerStart() {
+    const h = heightAt(0, 0);
+    player.pos.set(0.5, h + 3, 0.5);
+    player.vel.set(0, 0, 0);
+    player.grounded = false;
+    player.health = MAX_HEALTH;
+  }
+  placePlayerStart();
+
+  // wipe and rebuild the world with a fresh seed
+  function regenerateWorld() {
+    worldSeed = Math.floor(Math.random() * 100000);
+    blocks.clear();
+    for (const d of drops) scene.remove(d.mesh);
+    drops.length = 0;
+    for (const p of particles) { scene.remove(p.mesh); p.mesh.material.dispose(); }
+    particles.length = 0;
+    generateWorld();
+    placePlayerStart();
+    // full world changed — rebuild every type (also clears any now-empty types)
+    rebuildTypes(Object.keys(BLOCK_TYPES));
+    dirtyTypes.clear();
+  }
+
+  camera.rotation.order = 'YXZ';
+
+  // ---------- Input ----------
+  const keys = {};
+  // keys the game consumes — suppressed while playing so the browser/iframe
+  // doesn't scroll (Space), or trigger other default behavior.
+  const GAME_KEYS = new Set([
+    'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space',
+    'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5',
+    'Digit6', 'Digit7', 'Digit8', 'Digit9'
+  ]);
+  document.addEventListener('keydown', (e) => {
+    if (document.pointerLockElement === canvas && GAME_KEYS.has(e.code)) {
+      e.preventDefault();
+    }
+    keys[e.code] = true;
+    const num = parseInt(e.key);
+    if (num >= 1 && num <= 5) selectSlot(num - 1);
+    if (e.code === 'KeyC') setCreative(!creative);
+    if (e.code === 'KeyB') {
+      if (pickerOpen) closePicker();
+      else if (document.pointerLockElement === canvas) openPicker();
+    }
+    if (e.code === 'Escape' && pickerOpen) closePicker();
+  });
+  document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+  const overlay = document.getElementById('overlay');
+  const menuButtons = document.getElementById('menuButtons');
+  const controlsPanel = document.getElementById('controlsPanel');
+  const menuTitle = document.getElementById('menuTitle');
+  const menuSubtitle = document.getElementById('menuSubtitle');
+  const btnResume = document.getElementById('btnResume');
+  let hasStarted = false; // false until first play; controls first-load copy
+
+  function showControls(show) {
+    controlsPanel.style.display = show ? 'flex' : 'none';
+    menuButtons.style.display = show ? 'none' : 'flex';
+  }
+
+  function play() {
+    showControls(false);
+    canvas.requestPointerLock();
+  }
+
+  document.getElementById('btnResume').addEventListener('click', play);
+  document.getElementById('btnControls').addEventListener('click', () => showControls(true));
+  document.getElementById('btnBack').addEventListener('click', () => showControls(false));
+  document.getElementById('btnRegen').addEventListener('click', () => {
+    regenerateWorld();
+    play();
+  });
+
+  document.addEventListener('pointerlockchange', () => {
+    if (pickerOpen) return; // picker manages its own overlay; don't pop pause menu
+    const locked = document.pointerLockElement === canvas;
+    overlay.style.display = locked ? 'none' : 'flex';
+    if (!locked) {
+      // returned to menu (Esc or first load) — show the pause state
+      showControls(false);
+      if (hasStarted) {
+        menuTitle.textContent = 'Paused';
+        menuSubtitle.textContent = 'Press Play or Esc to resume';
+        btnResume.textContent = 'Resume';
+      }
+    } else {
+      hasStarted = true;
+    }
+  });
+
+  const MOUSE_SENS = 0.0022;
+  document.addEventListener('mousemove', (e) => {
+    if (document.pointerLockElement !== canvas) return;
+    player.yaw -= e.movementX * MOUSE_SENS;
+    player.pitch -= e.movementY * MOUSE_SENS;
+    const limit = Math.PI / 2 - 0.01;
+    player.pitch = Math.max(-limit, Math.min(limit, player.pitch));
+  });
+
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  canvas.addEventListener('mousedown', (e) => {
+    if (document.pointerLockElement !== canvas) return;
+    if (e.button === 0) tryDestroy();
+    if (e.button === 2) tryPlace();
+  });
+  canvas.addEventListener('wheel', (e) => {
+    if (document.pointerLockElement !== canvas) return;
+    e.preventDefault();
+    const dir = e.deltaY > 0 ? 1 : -1;
+    selectSlot((selectedIndex + dir + HOTBAR.length) % HOTBAR.length);
+  }, { passive: false });
+
+  // ---------- Hotbar UI ----------
+  const hotbarEl = document.getElementById('hotbar');
+  const hexOf = (type) => '#' + BLOCK_TYPES[type].color.toString(16).padStart(6, '0');
+  HOTBAR.forEach((type, i) => {
+    const slot = document.createElement('div');
+    slot.className = 'slot' + (i === 0 ? ' active' : '');
+    slot.innerHTML = `<span class="num">${i + 1}</span><div class="swatch" style="background:${hexOf(type)}"></div><span class="count"></span>`;
+    slot.addEventListener('click', () => selectSlot(i));
+    hotbarEl.appendChild(slot);
+  });
+  function selectSlot(i) {
+    selectedIndex = i;
+    document.querySelectorAll('.slot').forEach((el, idx) => el.classList.toggle('active', idx === i));
+  }
+  // refresh swatches + count badges — call whenever HOTBAR assignment,
+  // inventory counts, or creative mode changes (not every frame)
+  function updateHotbarUI() {
+    const slotEls = hotbarEl.querySelectorAll('.slot');
+    slotEls.forEach((slot, i) => {
+      const type = HOTBAR[i];
+      slot.querySelector('.swatch').style.background = hexOf(type);
+      const countEl = slot.querySelector('.count');
+      countEl.textContent = creative ? '' : inventory[type];
+    });
+  }
+
+  // ---------- Mode (creative / survival) ----------
+  const modeLabelEl = document.getElementById('modeLabel');
+  function updateModeLabel() {
+    modeLabelEl.textContent = creative ? 'Creative' : 'Survival';
+  }
+  const btnCreativeEl = document.getElementById('btnCreative');
+  function setCreative(on) {
+    creative = on;
+    updateModeLabel();
+    updateHotbarUI();
+    updateHealthUI();
+    btnCreativeEl.textContent = 'Mode: ' + (creative ? 'Creative' : 'Survival');
+  }
+  btnCreativeEl.addEventListener('click', () => setCreative(!creative));
+  updateModeLabel();
+  updateHotbarUI();
+
+  // ---------- Health (survival only) ----------
+  const FALL_DAMAGE_THRESHOLD = 10; // impact speed below this is a safe landing
+  const FALL_DAMAGE_SCALE = 6;      // hp lost per unit of speed over the threshold
+  const HEALTH_REGEN_RATE = 1.5;    // hp / second, while alive and not in creative
+  const healthBarEl = document.getElementById('healthBar');
+  const healthFillEl = document.getElementById('healthFill');
+
+  function updateHealthUI() {
+    healthBarEl.style.display = creative ? 'none' : 'block';
+    if (!creative) {
+      healthFillEl.style.width = Math.max(0, player.health / MAX_HEALTH) * 100 + '%';
+    }
+  }
+  updateHealthUI();
+
+  function applyFallDamage(impactSpeed) {
+    if (creative || impactSpeed <= FALL_DAMAGE_THRESHOLD) return;
+    player.health -= (impactSpeed - FALL_DAMAGE_THRESHOLD) * FALL_DAMAGE_SCALE;
+    flashDamage();
+    if (player.health <= 0) {
+      // no death screen for this jam build — just respawn at full health
+      placePlayerStart();
+    }
+    updateHealthUI();
+  }
+
+  const damageFlashEl = document.getElementById('damageFlash');
+  function flashDamage() {
+    // restart the CSS animation even if it's already mid-flash
+    damageFlashEl.classList.remove('hit');
+    void damageFlashEl.offsetWidth; // force reflow so the class re-triggers
+    damageFlashEl.classList.add('hit');
+  }
+
+  function regenHealth(dt) {
+    if (creative || player.health <= 0 || player.health >= MAX_HEALTH) return;
+    player.health = Math.min(MAX_HEALTH, player.health + HEALTH_REGEN_RATE * dt);
+    updateHealthUI();
+  }
+
+  // ---------- Block picker ----------
+  const blockPickerEl = document.getElementById('blockPicker');
+  const pickerGridEl = document.getElementById('pickerGrid');
+  let pickerOpen = false;
+  Object.keys(BLOCK_TYPES).forEach((type) => {
+    const cell = document.createElement('div');
+    cell.className = 'picker-cell';
+    cell.innerHTML = `<div class="swatch" style="background:${hexOf(type)}"></div>`;
+    cell.addEventListener('click', () => {
+      HOTBAR[selectedIndex] = type;
+      updateHotbarUI();
+      closePicker();
+    });
+    pickerGridEl.appendChild(cell);
+  });
+  function openPicker() {
+    pickerOpen = true;
+    blockPickerEl.style.display = 'flex';
+    document.exitPointerLock();
+  }
+  function closePicker() {
+    pickerOpen = false;
+    blockPickerEl.style.display = 'none';
+    if (hasStarted) canvas.requestPointerLock();
+  }
+
+  // ---------- Raycasting (Amanatides-Woo DDA voxel traversal) ----------
+  let targetBlock = null;   // [x,y,z] of block being looked at
+  let placeAt = null;       // [x,y,z] where a new block would go
+
+  const selectionBox = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(1.02, 1.02, 1.02)),
+    new THREE.LineBasicMaterial({ color: 0x000000 })
+  );
+  selectionBox.visible = false;
+  scene.add(selectionBox);
+
+  const _dir = new THREE.Vector3();
+  function updateTargetBlock() {
+    camera.getWorldDirection(_dir);
+    const ox = camera.position.x, oy = camera.position.y, oz = camera.position.z;
+    const dx = _dir.x, dy = _dir.y, dz = _dir.z;
+
+    // current voxel (blocks are centred on integers -> round to nearest)
+    let vx = Math.round(ox), vy = Math.round(oy), vz = Math.round(oz);
+
+    // step direction per axis
+    const stepX = dx > 0 ? 1 : -1, stepY = dy > 0 ? 1 : -1, stepZ = dz > 0 ? 1 : -1;
+
+    // distance along the ray to cross one full voxel on each axis
+    const tDeltaX = dx !== 0 ? Math.abs(1 / dx) : Infinity;
+    const tDeltaY = dy !== 0 ? Math.abs(1 / dy) : Infinity;
+    const tDeltaZ = dz !== 0 ? Math.abs(1 / dz) : Infinity;
+
+    // distance to the first voxel boundary on each axis. Voxel vx spans
+    // [vx-0.5, vx+0.5]; the next boundary in the step direction is at
+    // vx + step*0.5. Guard the divide against a zero component.
+    const boundX = vx + stepX * 0.5, boundY = vy + stepY * 0.5, boundZ = vz + stepZ * 0.5;
+    let tMaxX = dx !== 0 ? (boundX - ox) / dx : Infinity;
+    let tMaxY = dy !== 0 ? (boundY - oy) / dy : Infinity;
+    let tMaxZ = dz !== 0 ? (boundZ - oz) / dz : Infinity;
+
+    targetBlock = null;
+    placeAt = null;
+    let lastEmpty = [vx, vy, vz];
+
+    // if we somehow start inside a block, that's the target
+    if (isSolid(vx, vy, vz)) {
+      targetBlock = [vx, vy, vz];
+    } else {
+      // march up to REACH world units
+      while (Math.min(tMaxX, tMaxY, tMaxZ) <= REACH) {
+        if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+          vx += stepX; tMaxX += tDeltaX;
+        } else if (tMaxY < tMaxZ) {
+          vy += stepY; tMaxY += tDeltaY;
+        } else {
+          vz += stepZ; tMaxZ += tDeltaZ;
+        }
+        if (isSolid(vx, vy, vz)) {
+          targetBlock = [vx, vy, vz];
+          placeAt = lastEmpty;   // the empty voxel we came from
+          break;
+        }
+        lastEmpty = [vx, vy, vz];
+      }
+    }
+
+    if (targetBlock) {
+      selectionBox.position.set(targetBlock[0], targetBlock[1], targetBlock[2]);
+      selectionBox.visible = true;
+    } else {
+      selectionBox.visible = false;
+    }
+  }
+
+  function tryDestroy() {
+    if (!targetBlock) return;
+    const [x, y, z] = targetBlock;
+    const removedType = getBlock(x, y, z);
+    // mark the removed block's type + neighbours BEFORE deleting, so we can
+    // read what's around it; the delete then exposes those neighbour faces.
+    markEditDirty(x, y, z, removedType);
+    setBlock(x, y, z, null);
+    spawnParticles(x, y, z, removedType); // cosmetic puff, both modes
+    if (!creative) {
+      // survival: block becomes a collectible floating item, not an instant pickup
+      spawnDrop(x, y, z, removedType);
+    }
+  }
+
+  function tryPlace() {
+    if (!targetBlock || !placeAt) return;
+    const [px, py, pz] = placeAt;
+    // don't place inside the player
+    const feet = player.pos.clone();
+    const overlapsPlayer =
+      Math.abs(px - Math.floor(feet.x + 0.5)) < 1 &&
+      Math.abs(pz - Math.floor(feet.z + 0.5)) < 1 &&
+      (py === Math.floor(feet.y - 0.5) || py === Math.floor(feet.y + 0.5) || py === Math.floor(feet.y + 1.5));
+    if (overlapsPlayer) return;
+    const newType = HOTBAR[selectedIndex];
+    if (!creative) {
+      if (inventory[newType] <= 0) return; // out of stock
+      inventory[newType]--;
+    }
+    setBlock(px, py, pz, newType);
+    // placed block's own type + neighbours (their faces may now be hidden)
+    markEditDirty(px, py, pz, newType);
+    if (!creative) updateHotbarUI();
+  }
+
+  // ---------- Physics / movement ----------
+  // (x, feetY, z) is the player's FEET position. Tests the whole body box
+  // (PLAYER_RADIUS in X/Z, PLAYER_HEIGHT tall) against solid blocks across
+  // every vertical layer it spans, so torso-height blocks aren't missed.
+  const COLLISION_EPS = 0.001;
+  function collidesAt(x, feetY, z) {
+    const minX = Math.floor(x - PLAYER_RADIUS + 0.5);
+    const maxX = Math.floor(x + PLAYER_RADIUS + 0.5);
+    const minZ = Math.floor(z - PLAYER_RADIUS + 0.5);
+    const maxZ = Math.floor(z + PLAYER_RADIUS + 0.5);
+    // epsilon shrinks the span slightly so a body resting exactly on a
+    // surface doesn't register the block it's standing on as a collision.
+    const minY = Math.floor(feetY + COLLISION_EPS + 0.5);
+    const maxY = Math.floor(feetY + PLAYER_HEIGHT - COLLISION_EPS + 0.5);
+    for (let by = minY; by <= maxY; by++) {
+      for (let bx = minX; bx <= maxX; bx++) {
+        for (let bz = minZ; bz <= maxZ; bz++) {
+          if (isSolid(bx, by, bz)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function updatePlayer(dt) {
+    const forward = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw));
+    const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+
+    let moveX = 0, moveZ = 0;
+    if (keys['KeyW']) { moveX -= forward.x; moveZ -= forward.z; }
+    if (keys['KeyS']) { moveX += forward.x; moveZ += forward.z; }
+    if (keys['KeyA']) { moveX -= right.x; moveZ -= right.z; }
+    if (keys['KeyD']) { moveX += right.x; moveZ += right.z; }
+
+    const len = Math.hypot(moveX, moveZ);
+    if (len > 0) { moveX /= len; moveZ /= len; }
+
+    const dx = moveX * MOVE_SPEED * dt;
+    const dz = moveZ * MOVE_SPEED * dt;
+
+    // move on X / Z independently (feet = eye position minus eye height).
+    // collidesAt now tests the whole body, so one check per axis suffices.
+    const feetY = player.pos.y - EYE_HEIGHT;
+    if (!collidesAt(player.pos.x + dx, feetY, player.pos.z)) {
+      player.pos.x += dx;
+    }
+    if (!collidesAt(player.pos.x, feetY, player.pos.z + dz)) {
+      player.pos.z += dz;
+    }
+
+    // gravity
+    player.vel.y += GRAVITY * dt;
+    if (player.grounded && keys['Space']) {
+      player.vel.y = JUMP_SPEED;
+      player.grounded = false;
+    }
+
+    const newY = player.pos.y + player.vel.y * dt;
+    const newFeetY = newY - EYE_HEIGHT;
+
+    if (player.vel.y <= 0) {
+      // falling: if body would intersect ground, snap feet to top of block
+      if (collidesAt(player.pos.x, newFeetY, player.pos.z)) {
+        const impactSpeed = -player.vel.y; // speed at moment of landing
+        applyFallDamage(impactSpeed);
+        player.pos.y = Math.floor(newFeetY + 0.5) + 0.5 + EYE_HEIGHT;
+        player.vel.y = 0;
+        player.grounded = true;
+      } else {
+        player.pos.y = newY;
+        player.grounded = false;
+      }
+    } else {
+      // rising: if body would intersect a ceiling, stop upward motion
+      if (collidesAt(player.pos.x, newFeetY, player.pos.z)) {
+        player.vel.y = 0;
+      } else {
+        player.pos.y = newY;
+      }
+    }
+
+    // safety floor
+    if (player.pos.y < -20) {
+      player.pos.set(0.5, MAX_HEIGHT + 5, 0.5);
+      player.vel.set(0, 0, 0);
+    }
+
+    camera.position.copy(player.pos);
+    camera.rotation.y = player.yaw;
+    camera.rotation.x = player.pitch;
+  }
+
+  // ---------- Main loop ----------
+  let lastTime = performance.now();
+  let frames = 0, fpsTimer = 0;
+  const fpsEl = document.getElementById('fps');
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+
+    if (document.pointerLockElement === canvas) {
+      updatePlayer(dt);
+      updateDrops(dt, now / 1000);
+      updateParticles(dt);
+      regenHealth(dt);
+    }
+
+    flushDirty();
+    updateTargetBlock();
+
+    renderer.render(scene, camera);
+
+    frames++; fpsTimer += dt;
+    if (fpsTimer >= 0.5) {
+      fpsEl.textContent = Math.round(frames / fpsTimer) + ' fps';
+      frames = 0; fpsTimer = 0;
+    }
+  }
+
+  rebuildTypes(Object.keys(BLOCK_TYPES));
+  animate();
+})();
+</script>
 </body>
 </html>
