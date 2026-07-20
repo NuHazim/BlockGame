@@ -44,7 +44,7 @@ let centerChunk = null;
 // dirty to force a full re-filter (not just types that had edits).
 export function updateRenderCenter(x, z) {
   const [cx, cz] = chunkOf(x, z);
-  if (!centerChunk  centerChunk[0] !== cx  centerChunk[1] !== cz) {
+  if (!centerChunk || centerChunk[0] !== cx || centerChunk[1] !== cz) {
     centerChunk = [cx, cz];
     for (const t in materials) dirtyTypes.add(t);
   }
