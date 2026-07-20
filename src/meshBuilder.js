@@ -1,6 +1,6 @@
-import { BLOCK } from './config.js';
+import { BLOCK, RENDER_DISTANCE } from './config.js';
 import { materials } from './atlas.js';
-import { blocks, isSolid, getBlock } from './world.js';
+import { blocks, isSolid, getBlock, chunkOf } from './world.js';
 
 export const geometry = new THREE.BoxGeometry(BLOCK, BLOCK, BLOCK);
 
@@ -35,6 +35,21 @@ const dummy = new THREE.Object3D();
 // types whose meshes need rebuilding this frame
 let dirtyTypes = new Set();
 
+// chunk the player currently occupies -- only blocks within RENDER_DISTANCE
+// chunks of this are meshed; everything else is skipped entirely
+let centerChunk = null;
+
+// call once per frame with the player's position. Crossing into a new
+// chunk changes which blocks should be visible, so it marks every type
+// dirty to force a full re-filter (not just types that had edits).
+export function updateRenderCenter(x, z) {
+  const [cx, cz] = chunkOf(x, z);
+  if (!centerChunk  centerChunk[0] !== cx  centerChunk[1] !== cz) {
+    centerChunk = [cx, cz];
+    for (const t in materials) dirtyTypes.add(t);
+  }
+}
+
 function neighborsAllSolid(x, y, z) {
   return isSolid(x + 1, y, z) && isSolid(x - 1, y, z) &&
          isSolid(x, y + 1, z) && isSolid(x, y - 1, z) &&
@@ -51,6 +66,11 @@ export function rebuildTypes(types) {
   for (const [k, type] of blocks) {
     if (!grouped[type]) continue;              // type not dirty, skip
     const [x, y, z] = k.split(',').map(Number);
+    if (centerChunk) {
+      const [bcx, bcz] = chunkOf(x, z);
+      const dist = Math.max(Math.abs(bcx - centerChunk[0]), Math.abs(bcz - centerChunk[1]));
+      if (dist > RENDER_DISTANCE) continue;    // outside the loaded chunk radius
+    }
     if (neighborsAllSolid(x, y, z)) continue;  // fully hidden block
     grouped[type].push([x, y, z]);
   }

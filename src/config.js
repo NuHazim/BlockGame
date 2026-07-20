@@ -1,8 +1,9 @@
 // ---------- World & physics ----------
-export const WORLD_SIZE = 48;
+export const CHUNK_SIZE = 16;                        // blocks per chunk side
+export const CHUNK_COUNT = 6;                         // chunks per world side (6x6 grid)
+export const WORLD_SIZE = CHUNK_SIZE * CHUNK_COUNT;   // 96
 export const WORLD_HALF = WORLD_SIZE / 2;
-export const MAX_HEIGHT = 14;
-export const BLOCK = 1;
+export const RENDER_DISTANCE = 1;                     // chunk radius around the player -- 1 = 3x3 chunks rendered
 
 export const GRAVITY = -22;
 export const JUMP_SPEED = 8.2;

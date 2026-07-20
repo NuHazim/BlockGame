@@ -1,4 +1,4 @@
-import { WORLD_HALF, MAX_HEIGHT } from './config.js';
+import { WORLD_HALF, MAX_HEIGHT, CHUNK_SIZE, CHUNK_COUNT } from './config.js';
 
 // key "x,y,z" -> type string
 export const blocks = new Map();
@@ -9,6 +9,11 @@ export const isSolid = (x, y, z) => blocks.has(key(x, y, z));
 export function setBlock(x, y, z, type) {
   if (type === null) blocks.delete(key(x, y, z));
   else blocks.set(key(x, y, z), type);
+}
+
+// which chunk (cx, cz) a block's absolute (x, z) falls in
+export function chunkOf(x, z) {
+  return [Math.floor((x + WORLD_HALF) / CHUNK_SIZE), Math.floor((z + WORLD_HALF) / CHUNK_SIZE)];
 }
 
 // shifts the noise so each regenerate produces a new landscape
@@ -25,10 +30,15 @@ export function heightAt(x, z) {
   return Math.max(2, Math.floor(6 + n));
 }
 
-export function generateWorld() {
+function chunkOrigin(cx, cz) {
+  return [-WORLD_HALF + cx * CHUNK_SIZE, -WORLD_HALF + cz * CHUNK_SIZE];
+}
+
+function generateChunk(cx, cz) {
+  const [ox, oz] = chunkOrigin(cx, cz);
   const treeSpots = [];
-  for (let x = -WORLD_HALF; x < WORLD_HALF; x++) {
-    for (let z = -WORLD_HALF; z < WORLD_HALF; z++) {
+  for (let x = ox; x < ox + CHUNK_SIZE; x++) {
+    for (let z = oz; z < oz + CHUNK_SIZE; z++) {
       const h = heightAt(x, z);
       for (let y = 0; y <= h; y++) {
         let type;
@@ -44,6 +54,14 @@ export function generateWorld() {
     }
   }
   for (const [x, y, z] of treeSpots) placeTree(x, y, z);
+}
+
+export function generateWorld() {
+  for (let cx = 0; cx < CHUNK_COUNT; cx++) {
+    for (let cz = 0; cz < CHUNK_COUNT; cz++) {
+      generateChunk(cx, cz);
+    }
+  }
 }
 
 function placeTree(x, y, z) {

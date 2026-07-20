@@ -1,7 +1,7 @@
 import { BLOCK_TYPES } from './blocks.js';
 import { GAME_KEYS } from './config.js';
 import { generateWorld, regenerateTerrain } from './world.js';
-import { rebuildTypes, flushDirty, meshGroup } from './meshBuilder.js';
+import { rebuildTypes, flushDirty, meshGroup, updateRenderCenter } from './meshBuilder.js';
 import { player, keys, placePlayerStart, initMouseLook, updatePlayer } from './player.js';
 import { isCreative, setCreative } from './inventory.js';
 import { initEffects, updateDrops, updateParticles, clearEffects } from './effects.js';
@@ -43,6 +43,7 @@ window.addEventListener('resize', () => {
 // ---------- World + player init ----------
 generateWorld();
 placePlayerStart();
+updateRenderCenter(player.pos.x, player.pos.z);
 rebuildTypes(Object.keys(BLOCK_TYPES));
 
 // ---------- UI init ----------
@@ -67,6 +68,7 @@ function applyCreative(on) {
 function regenerateWorld() {
   regenerateTerrain();
   placePlayerStart();
+  updateRenderCenter(player.pos.x, player.pos.z);
   clearEffects();
   rebuildTypes(Object.keys(BLOCK_TYPES));
 }
@@ -120,6 +122,7 @@ function animate() {
     regenHealth(dt);
   }
 
+ updateRenderCenter(player.pos.x, player.pos.z);
   flushDirty();
   updateTargetBlock(camera);
 
