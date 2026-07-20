@@ -1,4 +1,4 @@
-import { WORLD_HALF, MAX_HEIGHT, CHUNK_SIZE, CHUNK_COUNT } from './config.js';
+import { MAX_HEIGHT, CHUNK_SIZE } from './config.js';
 
 // key "x,y,z" -> type string
 export const blocks = new Map();
@@ -13,11 +13,12 @@ export function setBlock(x, y, z, type) {
 
 // which chunk (cx, cz) a block's absolute (x, z) falls in
 export function chunkOf(x, z) {
-  return [Math.floor((x + WORLD_HALF) / CHUNK_SIZE), Math.floor((z + WORLD_HALF) / CHUNK_SIZE)];
+  return [Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE)];
 }
 
-// shifts the noise so each regenerate produces a new landscape
-let worldSeed = 0;
+// shifts the noise so each regenerate (and each fresh page load) produces a
+// new landscape instead of the same one every time
+let worldSeed = Math.floor(Math.random() * 100000);
 
 // simple deterministic pseudo-noise (no deps)
 export function heightAt(x, z) {
@@ -31,10 +32,19 @@ export function heightAt(x, z) {
 }
 
 function chunkOrigin(cx, cz) {
-  return [-WORLD_HALF + cx * CHUNK_SIZE, -WORLD_HALF + cz * CHUNK_SIZE];
+  return [cx * CHUNK_SIZE, cz * CHUNK_SIZE];
 }
 
+// tracks which chunks already have block data so we never regenerate
+// (and overwrite any player edits in) the same chunk twice
+const generatedChunks = new Set();
+const chunkKey = (cx, cz) => cx + ',' + cz;
+
 function generateChunk(cx, cz) {
+  const ck = chunkKey(cx, cz);
+  if (generatedChunks.has(ck)) return;
+  generatedChunks.add(ck);
+
   const [ox, oz] = chunkOrigin(cx, cz);
   const treeSpots = [];
   for (let x = ox; x < ox + CHUNK_SIZE; x++) {
@@ -56,12 +66,20 @@ function generateChunk(cx, cz) {
   for (const [x, y, z] of treeSpots) placeTree(x, y, z);
 }
 
-export function generateWorld() {
-  for (let cx = 0; cx < CHUNK_COUNT; cx++) {
-    for (let cz = 0; cz < CHUNK_COUNT; cz++) {
-      generateChunk(cx, cz);
+// generates every chunk within `radius` chunks of the chunk containing (x, z).
+// call this every time the player moves so the world keeps growing outward
+// forever instead of being generated once up front in a fixed bounding box.
+export function ensureChunksAround(x, z, radius) {
+  const [cx, cz] = chunkOf(x, z);
+  for (let dx = -radius; dx <= radius; dx++) {
+    for (let dz = -radius; dz <= radius; dz++) {
+      generateChunk(cx + dx, cz + dz);
     }
   }
+}
+
+export function generateWorld() {
+  ensureChunksAround(0, 0, 2); // a patch of ground around spawn so first load isn't empty
 }
 
 function placeTree(x, y, z) {
@@ -86,5 +104,6 @@ function placeTree(x, y, z) {
 export function regenerateTerrain() {
   worldSeed = Math.floor(Math.random() * 100000);
   blocks.clear();
+  generatedChunks.clear();
   generateWorld();
 }

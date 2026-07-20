@@ -1,6 +1,6 @@
 import { BLOCK_TYPES } from './blocks.js';
-import { GAME_KEYS } from './config.js';
-import { generateWorld, regenerateTerrain } from './world.js';
+import { GAME_KEYS, RENDER_DISTANCE } from './config.js';
+import { generateWorld, regenerateTerrain, ensureChunksAround } from './world.js';
 import { rebuildTypes, flushDirty, meshGroup, updateRenderCenter } from './meshBuilder.js';
 import { player, keys, placePlayerStart, initMouseLook, updatePlayer } from './player.js';
 import { isCreative, setCreative } from './inventory.js';
@@ -122,7 +122,8 @@ function animate() {
     regenHealth(dt);
   }
 
- updateRenderCenter(player.pos.x, player.pos.z);
+  ensureChunksAround(player.pos.x, player.pos.z, RENDER_DISTANCE + 1);
+  updateRenderCenter(player.pos.x, player.pos.z);
   flushDirty();
   updateTargetBlock(camera);
 
