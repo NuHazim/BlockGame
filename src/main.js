@@ -10,6 +10,7 @@ import { initBlockPicker, openPicker, closePicker, isPickerOpen } from './blockP
 import { initMenu, updateModeLabel, updateModeButtonLabel } from './menu.js';
 import { updateHealthUI, applyFallDamage, regenHealth } from './health.js';
 import { selectionBox, updateTargetBlock, tryDestroy, tryPlace } from './interaction.js';
+import { initDayNight } from './dayNight.js';
 
 // ---------- Renderer / Scene ----------
 const canvas = document.getElementById('c');
@@ -24,11 +25,7 @@ scene.fog = new THREE.Fog(0x87ceeb, 30, 90);
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 300);
 camera.rotation.order = 'YXZ';
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x4a4a3a, 0.9));
-const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-sun.position.set(40, 60, 20);
-scene.add(sun);
-scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+const dayNight = initDayNight(scene, renderer);
 
 scene.add(meshGroup);
 scene.add(selectionBox);
@@ -125,6 +122,7 @@ function animate() {
  updateRenderCenter(player.pos.x, player.pos.z);
   flushDirty();
   updateTargetBlock(camera);
+  dayNight.update(now, player.pos, isCreative());
 
   renderer.render(scene, camera);
 

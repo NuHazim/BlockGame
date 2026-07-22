@@ -18,6 +18,12 @@ export const COLLISION_EPS = 0.001;
 
 export const MOUSE_SENS = 0.0022;
 
+// ---------- Day / night cycle ----------
+// how long one full sunrise-to-sunrise loop takes, in real seconds.
+// the sun/moon path itself (rise in +x, overhead at noon, set in -x) is
+// modeled after the real sun's arc -- this just controls how fast it plays.
+export const DAY_LENGTH_SECONDS = 300;
+
 // ---------- Health / survival ----------
 export const MAX_HEALTH = 100;
 export const FALL_DAMAGE_THRESHOLD = 10; // impact speed below this is a safe landing
