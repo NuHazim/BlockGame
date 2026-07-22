@@ -9,6 +9,14 @@ import { DAY_LENGTH_SECONDS } from './config.js';
 // as day, dusk, night or dawn.
 
 const SUN_ORBIT_RADIUS = 150;
+// The visible disc is drawn much closer than the light itself. At 150 units
+// out, with the camera's near plane at 0.1, the depth buffer has almost no
+// precision left (that range is heavily skewed toward objects close to the
+// camera) -- so depthTest ends up unreliable and the sprite can fail to
+// draw at all. Keeping the sprite at a modest, fixed distance keeps its
+// depth well inside the precise part of the buffer, while still being much
+// farther out than any loaded terrain so blocks correctly occlude it.
+const SUN_SPRITE_DISTANCE = 80;
 
 const SKY_DAY = new THREE.Color(0x87ceeb);
 const SKY_SUNSET = new THREE.Color(0xff9a5c);
@@ -19,24 +27,18 @@ function smoothstep(edge0, edge1, x) {
   return t * t * (3 - 2 * t);
 }
 
-// small radial-gradient billboard used for both the sun and moon disc --
-// cheap, always faces the camera, and gives a soft glow instead of a
-// flat circle.
-function makeGlowSprite(core, glow, size) {
+// flat solid-color square billboard used for both the sun and moon disc --
+// always faces the camera, and (with depthTest enabled) gets hidden behind
+// blocks instead of showing through them.
+function makeSquareSprite(color, size) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
-  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  grad.addColorStop(0, core);
-  grad.addColorStop(0.3, core);
-  grad.addColorStop(0.55, glow);
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = grad;
+  ctx.fillStyle = color;
   ctx.fillRect(0, 0, size, size);
   const tex = new THREE.CanvasTexture(canvas);
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false });
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: true });
   const sprite = new THREE.Sprite(mat);
-  sprite.renderOrder = 999;
   return sprite;
 }
 
@@ -68,12 +70,14 @@ export function initDayNight(scene, renderer) {
   const hemi = new THREE.HemisphereLight(0xffffff, 0x4a4a3a, 0.5);
   scene.add(hemi);
 
-  const sunSprite = makeGlowSprite('rgba(255,246,220,1)', 'rgba(255,200,110,0.6)', 256);
+  const sunSprite = makeSquareSprite('#ffdd33', 64);
   sunSprite.scale.set(18, 18, 1);
+  sunSprite.frustumCulled = false;
   scene.add(sunSprite);
 
-  const moonSprite = makeGlowSprite('rgba(232,240,255,1)', 'rgba(160,180,230,0.4)', 256);
+  const moonSprite = makeSquareSprite('#b9c2cf', 64);
   moonSprite.scale.set(12, 12, 1);
+  moonSprite.frustumCulled = false;
   scene.add(moonSprite);
 
   const skyColor = new THREE.Color();
@@ -95,14 +99,16 @@ export function initDayNight(scene, renderer) {
     tmpMoonDir.copy(tmpSunDir).negate();
 
     tmpPos.copy(tmpSunDir).multiplyScalar(SUN_ORBIT_RADIUS).add(playerPos);
-    sunSprite.position.copy(tmpPos);
     sunLight.position.copy(tmpPos);
     sunLight.target.position.copy(playerPos);
+    tmpPos.copy(tmpSunDir).multiplyScalar(SUN_SPRITE_DISTANCE).add(playerPos);
+    sunSprite.position.copy(tmpPos);
 
     tmpPos.copy(tmpMoonDir).multiplyScalar(SUN_ORBIT_RADIUS).add(playerPos);
-    moonSprite.position.copy(tmpPos);
     moonLight.position.copy(tmpPos);
     moonLight.target.position.copy(playerPos);
+    tmpPos.copy(tmpMoonDir).multiplyScalar(SUN_SPRITE_DISTANCE).add(playerPos);
+    moonSprite.position.copy(tmpPos);
 
     const sunElevation = tmpSunDir.y;   // -1..1
     const moonElevation = tmpMoonDir.y;
