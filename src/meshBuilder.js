@@ -90,6 +90,8 @@ export function rebuildTypes(types) {
     }
     mesh.instanceMatrix.needsUpdate = true;
     mesh.userData.type = t;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     meshGroup.add(mesh);
     meshes[t] = mesh;
   }

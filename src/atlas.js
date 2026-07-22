@@ -40,7 +40,10 @@ function tileMaterial(tileName) {
   // (see meshBuilder.js bakeFaceShading) shades the texture instead of
   // tinting it -- keeps the "each face reads as a distinct plane" look,
   // now with real texture detail layered on top.
-  return new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, map: tex });
+  // MeshLambertMaterial (not MeshBasicMaterial) so blocks actually respond
+  // to the sun/moon lights and the day/night cycle's shadows -- a basic
+  // material ignores lights and shadows entirely.
+  return new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true, map: tex });
 }
 
 // build a block type's material(s) from its `faces` entry in BLOCK_TYPES.
