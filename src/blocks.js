@@ -12,7 +12,10 @@ export const BLOCK_TYPES = {
   stone: { color: 0x8a8a8e, faces: { all: 'stone' } },
   wood:  { color: 0x6b4423, faces: { top: 'woodTop', side: 'woodSide', bottom: 'woodTop' } },
   leaves:{ color: 0x2f8f4e, faces: { all: 'leaves' } },
-  obsidian:{color:0x2b2b2b, faces: { all: 'obsidian'} }
+  obsidian:{color:0x2b2b2b, faces: { all: 'obsidian'} },
+  sand:  { color: 0xe0d29a, faces: { all: 'sand' } },
+  snow:  { color: 0xf5f9ff, faces: { top: 'snow', side: 'snowSide', bottom: 'stone' } },
+  water: { color: 0x3a6fd8, faces: { all: 'water' } }
 };
 
 // which block types show up in the hotbar, and in what order.
@@ -81,6 +84,19 @@ function paintWoodBark(ctx, x0, y0, size) {
   }
 }
 
+// stone base with a jagged white cap along the top -- snow block sides
+function paintSnowSide(ctx, x0, y0, size) {
+  paintSpeckle(ctx, x0, y0, size, BLOCK_TYPES.stone.color, 14);
+  const bandBase = Math.round(size * 0.3);
+  for (let x = 0; x < size; x++) {
+    const band = bandBase + (Math.random() < 0.5 ? 1 : 0);
+    for (let y = 0; y < band; y++) {
+      ctx.fillStyle = shade(BLOCK_TYPES.snow.color, (Math.random() - 0.5) * 10);
+      ctx.fillRect(x0 + x, y0 + y, 1, 1);
+    }
+  }
+}
+
 // ---- tile registry: tile name -> paint function ----
 // extend this when adding new block art.
 export const TILE_PAINTERS = {
@@ -91,6 +107,10 @@ export const TILE_PAINTERS = {
   woodTop:   (ctx, x, y, s) => paintWoodRings(ctx, x, y, s),
   woodSide:  (ctx, x, y, s) => paintWoodBark(ctx, x, y, s),
   leaves:    (ctx, x, y, s) => paintSpeckle(ctx, x, y, s, BLOCK_TYPES.leaves.color, 26),
+  sand:      (ctx, x, y, s) => paintSpeckle(ctx, x, y, s, BLOCK_TYPES.sand.color, 10),
+  snow:      (ctx, x, y, s) => paintSpeckle(ctx, x, y, s, BLOCK_TYPES.snow.color, 8),
+  snowSide:  (ctx, x, y, s) => paintSnowSide(ctx, x, y, s),
+  water:     (ctx, x, y, s) => paintSpeckle(ctx, x, y, s, BLOCK_TYPES.water.color, 12),
   // paste into TILE_PAINTERS = { ... }
     obsidian: (ctx, x0, y0, size) => {
     const PIXELS = [
