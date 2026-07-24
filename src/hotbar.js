@@ -11,7 +11,8 @@ export function initHotbar() {
   HOTBAR.forEach((type, i) => {
     const slot = document.createElement('div');
     slot.className = 'slot' + (i === 0 ? ' active' : '');
-    slot.innerHTML = `<span class="num">${i + 1}</span><div class="swatch" style="background-image:url(${blockIconURL(type)})"></div><span class="count"></span>`;
+    // no icon yet since every slot starts empty -- swatch fills in via updateHotbarUI
+    slot.innerHTML = `<span class="num">${i + 1}</span><div class="swatch"></div><span class="count"></span>`;
     slot.addEventListener('click', () => selectSlot(i));
     hotbarEl.appendChild(slot);
   });
@@ -33,7 +34,7 @@ export function updateHotbarUI() {
   const slotEls = hotbarEl.querySelectorAll('.slot');
   slotEls.forEach((slot, i) => {
     const type = HOTBAR[i];
-    slot.querySelector('.swatch').style.backgroundImage = `url(${blockIconURL(type)})`;
-    slot.querySelector('.count').textContent = isCreative() ? '' : inventory[type];
+    slot.querySelector('.swatch').style.backgroundImage = type ? `url(${blockIconURL(type)})` : '';
+    slot.querySelector('.count').textContent = (type && !isCreative()) ? inventory[type] : '';
   });
 }

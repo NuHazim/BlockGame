@@ -1,6 +1,6 @@
 import {
   GRAVITY, JUMP_SPEED, MOVE_SPEED, PLAYER_RADIUS, EYE_HEIGHT, PLAYER_HEIGHT,
-  MOUSE_SENS, MAX_HEIGHT, COLLISION_EPS, MAX_HEALTH
+  MOUSE_SENS, MAX_HEIGHT, COLLISION_EPS, MAX_HEALTH, AIR_CONTROL_ACCEL
 } from './config.js';
 import { isSolid, heightAt } from './world.js';
 
@@ -71,14 +71,45 @@ export function updatePlayer(dt, camera, onLand) {
   const len = Math.hypot(moveX, moveZ);
   if (len > 0) { moveX /= len; moveZ /= len; }
 
-  const dx = moveX * MOVE_SPEED * dt;
-  const dz = moveZ * MOVE_SPEED * dt;
+  // Grounded movement sets horizontal velocity directly (snappy, classic
+  // block-game walk control). Airborne movement instead STEERS the
+  // existing horizontal velocity by a limited amount per frame, and never
+  // zeroes it out just because keys were released -- that's what makes a
+  // running jump carry its momentum through the air instead of stopping
+  // dead the instant you let go of WASD mid-jump.
+  if (player.grounded) {
+    player.vel.x = moveX * MOVE_SPEED;
+    player.vel.z = moveZ * MOVE_SPEED;
+  } else {
+    if (len > 0) {
+      player.vel.x += moveX * AIR_CONTROL_ACCEL * dt;
+      player.vel.z += moveZ * AIR_CONTROL_ACCEL * dt;
+    }
+    // Cap horizontal air speed to MOVE_SPEED. Without this, holding a
+    // direction key through an entire jump arc keeps adding velocity every
+    // single frame with nothing pulling it back down -- so a jump held
+    // more than a few frames could build up far more speed than normal
+    // walking ever reaches, launching the player way further than
+    // intended. Clamping here means air control can steer/preserve
+    // momentum but never exceed the normal ground move speed.
+    const airSpeed = Math.hypot(player.vel.x, player.vel.z);
+    if (airSpeed > MOVE_SPEED) {
+      const scale = MOVE_SPEED / airSpeed;
+      player.vel.x *= scale;
+      player.vel.z *= scale;
+    }
+  }
+
+  const dx = player.vel.x * dt;
+  const dz = player.vel.z * dt;
 
   // move on X / Z independently (feet = eye position minus eye height).
   // collidesAt tests the whole body, so one check per axis suffices.
   const feetY = player.pos.y - EYE_HEIGHT;
   if (!collidesAt(player.pos.x + dx, feetY, player.pos.z)) player.pos.x += dx;
+  else player.vel.x = 0; // hit a wall -- kill momentum on that axis instead of clipping through
   if (!collidesAt(player.pos.x, feetY, player.pos.z + dz)) player.pos.z += dz;
+  else player.vel.z = 0;
 
   // gravity
   player.vel.y += GRAVITY * dt;

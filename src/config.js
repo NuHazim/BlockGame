@@ -8,11 +8,12 @@ export const MAX_HEIGHT = 40
 
 export const SEA_LEVEL = 5;
 export const SNOW_LEVEL = 21;
-export const RENDER_DISTANCE = 1;                     // chunk radius around the player -- 1 = 3x3 chunks rendered
+export const RENDER_DISTANCE = 2;                     // chunk radius around the player -- 2 = 5x5 chunks rendered
 
 export const GRAVITY = -22;
 export const JUMP_SPEED = 8.2;
 export const MOVE_SPEED = 6.0;
+export const AIR_CONTROL_ACCEL = 20;   // how fast horizontal velocity can be steered while airborne (units/s^2) -- keeps some control without erasing existing momentum
 export const PLAYER_RADIUS = 0.32;
 export const EYE_HEIGHT = 1.62;
 export const PLAYER_HEIGHT = 1.8; // full body height, feet to head
@@ -29,7 +30,7 @@ export const DAY_LENGTH_SECONDS = 300;
 
 // ---------- Health / survival ----------
 export const MAX_HEALTH = 100;
-export const FALL_DAMAGE_THRESHOLD = 10; // impact speed below this is a safe landing
+export const FALL_DAMAGE_THRESHOLD = 11.5; // impact speed (units/s) below which a landing is safe -- ~3 blocks of fall: sqrt(2 * |GRAVITY| * 3)
 export const FALL_DAMAGE_SCALE = 6;      // hp lost per unit of speed over the threshold
 export const HEALTH_REGEN_RATE = 1.5;    // hp / second
 

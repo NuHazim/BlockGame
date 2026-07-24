@@ -20,7 +20,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 30, 90);
+scene.fog = new THREE.Fog(0x87ceeb, 40, 130);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 300);
 camera.rotation.order = 'YXZ';
@@ -79,11 +79,11 @@ document.addEventListener('keydown', (e) => {
   }
   keys[e.code] = true;
   const num = parseInt(e.key);
-  if (num >= 1 && num <= 5) selectSlot(num - 1);
+  if (num >= 1 && num <= 9) selectSlot(num - 1);
   if (e.code === 'KeyC') applyCreative(!isCreative());
   if (e.code === 'KeyB') {
     if (isPickerOpen()) closePicker(canvas);
-    else if (document.pointerLockElement === canvas) openPicker();
+    else if (document.pointerLockElement === canvas) openPicker(canvas);
   }
   if (e.code === 'Escape' && isPickerOpen()) closePicker(canvas);
 });

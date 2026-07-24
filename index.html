@@ -20,13 +20,14 @@
 
   #hotbar {
     position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
-    display: flex; gap: 6px; z-index: 10; user-select: none;
+    display: flex; gap: 5px; z-index: 10; user-select: none;
+    max-width: 95vw; flex-wrap: nowrap;
   }
   .slot {
-    width: 52px; height: 52px; background: rgba(20,20,20,0.55);
+    width: 46px; height: 46px; background: rgba(20,20,20,0.55);
     border: 2px solid rgba(255,255,255,0.3); border-radius: 6px;
     display: flex; align-items: center; justify-content: center;
-    cursor: pointer; position: relative;
+    cursor: pointer; position: relative; flex: 0 0 auto;
   }
   .slot.active { border-color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.8); }
   .slot .swatch {

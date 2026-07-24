@@ -99,6 +99,7 @@ export function tryPlace() {
   if (overlapsPlayer) return;
 
   const newType = HOTBAR[getSelectedIndex()];
+  if (!newType) return; // empty slot -- nothing to place, grab a block from the picker first
   if (!isCreative()) {
     if (inventory[newType] <= 0) return; // out of stock
     inventory[newType]--;

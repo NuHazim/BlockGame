@@ -18,9 +18,11 @@ export const BLOCK_TYPES = {
   water: { color: 0x3a6fd8, faces: { all: 'water' } }
 };
 
-// which block types show up in the hotbar, and in what order.
-// the block picker can reassign any slot to any BLOCK_TYPES entry at runtime.
-export const HOTBAR = ['grass', 'dirt', 'stone', 'wood', 'leaves'];
+// 9 hotbar slots, all empty by default. In survival, slots are filled by
+// opening the block picker (B) and choosing from blocks you've actually
+// collected -- see blockPicker.js. Creative mode still lets any slot be
+// set to any block type, since there's no inventory to draw from there.
+export const HOTBAR = [null, null, null, null, null, null, null, null, null];
 
 // ---------- Tile art ----------
 // Small drawing helpers used to paint each 16x16 tile. Add a new one here
