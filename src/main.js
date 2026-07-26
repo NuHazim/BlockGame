@@ -11,6 +11,7 @@ import { initMenu, updateModeLabel, updateModeButtonLabel } from './menu.js';
 import { updateHealthUI, applyFallDamage, regenHealth } from './health.js';
 import { selectionBox, updateTargetBlock, tryDestroy, tryPlace } from './interaction.js';
 import { initDayNight } from './dayNight.js';
+import { initClouds, updateClouds } from './clouds.js';
 
 // ---------- Renderer / Scene ----------
 const canvas = document.getElementById('c');
@@ -30,6 +31,7 @@ const dayNight = initDayNight(scene, renderer);
 scene.add(meshGroup);
 scene.add(selectionBox);
 initEffects(scene);
+initClouds(scene);
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -124,6 +126,7 @@ function animate() {
   flushDirty();
   updateTargetBlock(camera);
   dayNight.update(now, player.pos, isCreative());
+  updateClouds(dt, player.pos);
 
   renderer.render(scene, camera);
 

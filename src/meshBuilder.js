@@ -1,6 +1,6 @@
 import { BLOCK, RENDER_DISTANCE } from './config.js';
 import { materials } from './atlas.js';
-import { blocks, isSolid, getBlock, chunkOf } from './world.js';
+import { blocks, isSolid, getBlock, chunkOf, getChunkBlocks } from './world.js';
 
 export const geometry = new THREE.BoxGeometry(BLOCK, BLOCK, BLOCK);
 
@@ -59,20 +59,39 @@ function neighborsAllSolid(x, y, z) {
 // Rebuild only the instanced meshes for the given types. Breaking/placing a
 // block also exposes/hides neighbour faces, so callers must mark the touched
 // block's type AND its 6 neighbours' types dirty (see markEditDirty).
+//
+// Only scans chunks within RENDER_DISTANCE of centerChunk (via the chunk
+// index in world.js) instead of the whole `blocks` map -- the map only ever
+// grows as the world is explored, so scanning all of it on every chunk
+// crossing gets slower and slower over a play session. This keeps rebuild
+// cost bounded by "blocks near the player," not "blocks ever generated".
 export function rebuildTypes(types) {
   const grouped = {};
   for (const t of types) grouped[t] = [];
 
-  for (const [k, type] of blocks) {
-    if (!grouped[type]) continue;              // type not dirty, skip
-    const [x, y, z] = k.split(',').map(Number);
-    if (centerChunk) {
-      const [bcx, bcz] = chunkOf(x, z);
-      const dist = Math.max(Math.abs(bcx - centerChunk[0]), Math.abs(bcz - centerChunk[1]));
-      if (dist > RENDER_DISTANCE) continue;    // outside the loaded chunk radius
-    }
-    if (neighborsAllSolid(x, y, z)) continue;  // fully hidden block
+  function consider(k, type) {
+    if (!grouped[type]) return; // type not dirty, skip
+    const x = +k.slice(0, k.indexOf(','));
+    const rest = k.slice(k.indexOf(',') + 1);
+    const y = +rest.slice(0, rest.indexOf(','));
+    const z = +rest.slice(rest.indexOf(',') + 1);
+    if (neighborsAllSolid(x, y, z)) return; // fully hidden block
     grouped[type].push([x, y, z]);
+  }
+
+  if (centerChunk) {
+    const [ccx, ccz] = centerChunk;
+    for (let dcx = -RENDER_DISTANCE; dcx <= RENDER_DISTANCE; dcx++) {
+      for (let dcz = -RENDER_DISTANCE; dcz <= RENDER_DISTANCE; dcz++) {
+        const cm = getChunkBlocks(ccx + dcx, ccz + dcz);
+        if (!cm) continue;
+        for (const [k, type] of cm) consider(k, type);
+      }
+    }
+  } else {
+    // no center yet (shouldn't normally happen -- updateRenderCenter runs
+    // before the first rebuildTypes call in main.js) -- fall back to a full scan
+    for (const [k, type] of blocks) consider(k, type);
   }
 
   for (const t of types) {

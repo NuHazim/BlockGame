@@ -2,18 +2,42 @@ import { MAX_HEIGHT, CHUNK_SIZE } from './config.js';
 
 // key "x,y,z" -> type string
 export const blocks = new Map();
+// chunk key "cx,cz" -> Map(blockKey -> type) -- lets meshBuilder scan only
+// nearby chunks instead of the entire world every rebuild
+const chunkIndex = new Map();
+
 const key = (x, y, z) => x + ',' + y + ',' + z;
 export const getBlock = (x, y, z) => blocks.get(key(x, y, z));
 export const isSolid = (x, y, z) => blocks.has(key(x, y, z));
 
-export function setBlock(x, y, z, type) {
-  if (type === null) blocks.delete(key(x, y, z));
-  else blocks.set(key(x, y, z), type);
-}
-
 // which chunk (cx, cz) a block's absolute (x, z) falls in
 export function chunkOf(x, z) {
   return [Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE)];
+}
+
+function chunkKeyOf(x, z) {
+  const [cx, cz] = chunkOf(x, z);
+  return cx + ',' + cz;
+}
+
+export function setBlock(x, y, z, type) {
+  const k = key(x, y, z);
+  const ck = chunkKeyOf(x, z);
+  if (type === null) {
+    blocks.delete(k);
+    const cm = chunkIndex.get(ck);
+    if (cm) cm.delete(k);
+  } else {
+    blocks.set(k, type);
+    let cm = chunkIndex.get(ck);
+    if (!cm) { cm = new Map(); chunkIndex.set(ck, cm); }
+    cm.set(k, type);
+  }
+}
+
+// returns the Map(blockKey -> type) for one chunk, or undefined if empty/ungenerated
+export function getChunkBlocks(cx, cz) {
+  return chunkIndex.get(cx + ',' + cz);
 }
 
 // shifts the noise so each regenerate (and each fresh page load) produces a
@@ -104,6 +128,7 @@ function placeTree(x, y, z) {
 export function regenerateTerrain() {
   worldSeed = Math.floor(Math.random() * 100000);
   blocks.clear();
+  chunkIndex.clear();
   generatedChunks.clear();
   generateWorld();
 }

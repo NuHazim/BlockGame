@@ -16,7 +16,7 @@ const SUN_ORBIT_RADIUS = 150;
 // draw at all. Keeping the sprite at a modest, fixed distance keeps its
 // depth well inside the precise part of the buffer, while still being much
 // farther out than any loaded terrain so blocks correctly occlude it.
-const SUN_SPRITE_DISTANCE = 80;
+const SUN_SPRITE_DISTANCE = 130;
 
 const SKY_DAY = new THREE.Color(0x87ceeb);
 const SKY_SUNSET = new THREE.Color(0xff9a5c);
@@ -27,19 +27,24 @@ function smoothstep(edge0, edge1, x) {
   return t * t * (3 - 2 * t);
 }
 
-// flat solid-color square billboard used for both the sun and moon disc --
-// always faces the camera, and (with depthTest enabled) gets hidden behind
-// blocks instead of showing through them.
-function makeSquareSprite(color, size) {
+// Soft radial-gradient disc with a glow halo, instead of a flat solid
+// square -- reads as a proper sun/moon instead of a floating tile.
+// depthTest stays on so blocks/terrain still occlude it correctly.
+function makeGlowSprite({ core, mid, edge, size = 256 }) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = color;
+  const cx = size / 2, cy = size / 2;
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, size / 2);
+  grad.addColorStop(0, core);
+  grad.addColorStop(0.28, mid);
+  grad.addColorStop(0.55, edge);
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
   const tex = new THREE.CanvasTexture(canvas);
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: true });
-  const sprite = new THREE.Sprite(mat);
-  return sprite;
+  return new THREE.Sprite(mat);
 }
 
 export function initDayNight(scene, renderer) {
@@ -70,13 +75,21 @@ export function initDayNight(scene, renderer) {
   const hemi = new THREE.HemisphereLight(0xffffff, 0x4a4a3a, 0.5);
   scene.add(hemi);
 
-  const sunSprite = makeSquareSprite('#ffdd33', 64);
-  sunSprite.scale.set(18, 18, 1);
+  const sunSprite = makeGlowSprite({
+    core: 'rgba(255,255,255,1)',
+    mid: 'rgba(255,224,140,0.95)',
+    edge: 'rgba(255,170,60,0.35)'
+  });
+  sunSprite.scale.set(34, 34, 1);
   sunSprite.frustumCulled = false;
   scene.add(sunSprite);
 
-  const moonSprite = makeSquareSprite('#b9c2cf', 64);
-  moonSprite.scale.set(12, 12, 1);
+  const moonSprite = makeGlowSprite({
+    core: 'rgba(255,255,255,1)',
+    mid: 'rgba(210,222,245,0.9)',
+    edge: 'rgba(160,180,220,0.28)'
+  });
+  moonSprite.scale.set(22, 22, 1);
   moonSprite.frustumCulled = false;
   scene.add(moonSprite);
 
@@ -98,17 +111,33 @@ export function initDayNight(scene, renderer) {
     tmpSunDir.set(Math.cos(angle), Math.sin(angle), 0.35).normalize();
     tmpMoonDir.copy(tmpSunDir).negate();
 
+    // Light positions follow the player fully (including height) so the
+    // shadow camera, which is only sized to cover a small area, stays
+    // centered on them.
     tmpPos.copy(tmpSunDir).multiplyScalar(SUN_ORBIT_RADIUS).add(playerPos);
     sunLight.position.copy(tmpPos);
     sunLight.target.position.copy(playerPos);
-    tmpPos.copy(tmpSunDir).multiplyScalar(SUN_SPRITE_DISTANCE).add(playerPos);
-    sunSprite.position.copy(tmpPos);
 
     tmpPos.copy(tmpMoonDir).multiplyScalar(SUN_ORBIT_RADIUS).add(playerPos);
     moonLight.position.copy(tmpPos);
     moonLight.target.position.copy(playerPos);
-    tmpPos.copy(tmpMoonDir).multiplyScalar(SUN_SPRITE_DISTANCE).add(playerPos);
-    moonSprite.position.copy(tmpPos);
+
+    // The visible sun/moon sprites, however, should NOT rise and fall with
+    // the player's own altitude (walking up a hill or jumping shouldn't
+    // visibly move the sun) and must stay well clear of the fixed-height
+    // cloud layer. So their vertical position is anchored to ground level
+    // (y=0) rather than to playerPos.y -- only x/z follow the player, to
+    // keep the sun centered as they roam.
+    sunSprite.position.set(
+      playerPos.x + tmpSunDir.x * SUN_SPRITE_DISTANCE,
+      tmpSunDir.y * SUN_SPRITE_DISTANCE,
+      playerPos.z + tmpSunDir.z * SUN_SPRITE_DISTANCE
+    );
+    moonSprite.position.set(
+      playerPos.x + tmpMoonDir.x * SUN_SPRITE_DISTANCE,
+      tmpMoonDir.y * SUN_SPRITE_DISTANCE,
+      playerPos.z + tmpMoonDir.z * SUN_SPRITE_DISTANCE
+    );
 
     const sunElevation = tmpSunDir.y;   // -1..1
     const moonElevation = tmpMoonDir.y;
@@ -121,6 +150,12 @@ export function initDayNight(scene, renderer) {
     const dayAmount = smoothstep(-0.1, 0.35, sunElevation);
     // warm tint that peaks right around sunrise/sunset, fades elsewhere
     const sunsetAmount = 1 - smoothstep(0, 0.3, Math.abs(sunElevation));
+
+    // sun disc itself warms and swells slightly near the horizon, like a
+    // real sunset -- purely cosmetic, driven by the same sunsetAmount used
+    // for lighting so they stay in sync.
+    const sunScale = 34 + sunsetAmount * 14;
+    sunSprite.scale.set(sunScale, sunScale, 1);
 
     sunLight.intensity = dayAmount * 1.1;
     sunLight.color.set(0xffffff).lerp(new THREE.Color(0xff9a5c), sunsetAmount * 0.85);
