@@ -5,17 +5,21 @@
 // cubes (not textured -- too small to matter) and as the base hue for
 // procedural tile art. `faces` says which tile (see TILE_PAINTERS below)
 // goes on which cube face: `all` = same tile every face, otherwise give
-// top / bottom / side.
+// top / bottom / side. `label` is the display name shown in hover tooltips.
 export const BLOCK_TYPES = {
-  grass: { color: 0x5aa93b, faces: { top: 'grassTop', side: 'grassSide', bottom: 'dirt' } },
-  dirt:  { color: 0x8a5a34, faces: { all: 'dirt' } },
-  stone: { color: 0x8a8a8e, faces: { all: 'stone' } },
-  wood:  { color: 0x6b4423, faces: { top: 'woodTop', side: 'woodSide', bottom: 'woodTop' } },
-  leaves:{ color: 0x2f8f4e, faces: { all: 'leaves' } },
-  obsidian:{color:0x2b2b2b, faces: { all: 'obsidian'} },
-  sand:  { color: 0xe0d29a, faces: { all: 'sand' } },
-  snow:  { color: 0xf5f9ff, faces: { top: 'snow', side: 'snowSide', bottom: 'stone' } },
-  water: { color: 0x3a6fd8, faces: { all: 'water' } }
+  grass: { label: 'Grass', color: 0x5aa93b, faces: { top: 'grassTop', side: 'grassSide', bottom: 'dirt' } },
+  dirt:  { label: 'Dirt',  color: 0x8a5a34, faces: { all: 'dirt' } },
+  stone: { label: 'Stone', color: 0x8a8a8e, faces: { all: 'stone' } },
+  wood:  { label: 'Wood',  color: 0x6b4423, faces: { top: 'woodTop', side: 'woodSide', bottom: 'woodTop' } },
+  leaves:{ label: 'Leaves',color: 0x2f8f4e, faces: { all: 'leaves' } },
+  obsidian:{label:'Obsidian', color:0x2b2b2b, faces: { all: 'obsidian'} },
+  sand:  { label: 'Sand',  color: 0xe0d29a, faces: { all: 'sand' } },
+  snow:  { label: 'Snow',  color: 0xf5f9ff, faces: { top: 'snow', side: 'snowSide', bottom: 'stone' } },
+  water: { label: 'Water', color: 0x3a6fd8, faces: { all: 'water' } },
+  // NOTE: torch is still stored/mined/placed like a regular block (solid,
+  // occupies one full cell) for simplicity -- see meshBuilder.js for the
+  // thinner visual geometry and torches.js for the actual light it emits.
+  torch: { label: 'Torch', color: 0xffaa33, faces: { all: 'torch' } }
 };
 
 // 9 hotbar slots, all empty by default. In survival, slots are filled by
@@ -99,6 +103,34 @@ function paintSnowSide(ctx, x0, y0, size) {
   }
 }
 
+// dark backdrop, wooden stick, glowing flame tip -- torch tile
+function paintTorch(ctx, x0, y0, size) {
+  paintSpeckle(ctx, x0, y0, size, 0x1a1410, 4);
+
+  const stickW = Math.max(1, Math.round(size * 0.18));
+  const stickX = x0 + Math.round(size * 0.5 - stickW / 2);
+  for (let y = Math.round(size * 0.35); y < size; y++) {
+    for (let x = 0; x < stickW; x++) {
+      ctx.fillStyle = shade(BLOCK_TYPES.wood.color, (Math.random() - 0.5) * 10);
+      ctx.fillRect(stickX + x, y0 + y, 1, 1);
+    }
+  }
+
+  const cx = x0 + size / 2, cy = y0 + size * 0.28;
+  for (let x = 0; x < size; x++) {
+    for (let y = 0; y < size * 0.42; y++) {
+      const d = Math.hypot(x0 + x - cx, y0 + y - cy);
+      if (d < size * 0.2) {
+        ctx.fillStyle = shade(0xffcc55, (Math.random() - 0.5) * 40);
+        ctx.fillRect(x0 + x, y0 + y, 1, 1);
+      } else if (d < size * 0.3) {
+        ctx.fillStyle = shade(0xff5010, (Math.random() - 0.5) * 30);
+        ctx.fillRect(x0 + x, y0 + y, 1, 1);
+      }
+    }
+  }
+}
+
 // ---- tile registry: tile name -> paint function ----
 // extend this when adding new block art.
 export const TILE_PAINTERS = {
@@ -113,8 +145,8 @@ export const TILE_PAINTERS = {
   snow:      (ctx, x, y, s) => paintSpeckle(ctx, x, y, s, BLOCK_TYPES.snow.color, 8),
   snowSide:  (ctx, x, y, s) => paintSnowSide(ctx, x, y, s),
   water:     (ctx, x, y, s) => paintSpeckle(ctx, x, y, s, BLOCK_TYPES.water.color, 12),
-  // paste into TILE_PAINTERS = { ... }
-    obsidian: (ctx, x0, y0, size) => {
+  torch:     (ctx, x, y, s) => paintTorch(ctx, x, y, s),
+  obsidian: (ctx, x0, y0, size) => {
     const PIXELS = [
         ["#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b"],
         ["#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b"],
@@ -142,8 +174,5 @@ export const TILE_PAINTERS = {
         ctx.fillRect(x0 + x * scale, y0 + y * scale, scale, scale);
         }
     }
-    },
-
-// and register the block type itself, e.g.:
-// obsidianBlock: { color: 0x888888, faces: { all: 'obsidian' } }
+    }
 };

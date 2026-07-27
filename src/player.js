@@ -1,8 +1,12 @@
 import {
   GRAVITY, JUMP_SPEED, MOVE_SPEED, PLAYER_RADIUS, EYE_HEIGHT, PLAYER_HEIGHT,
-  MOUSE_SENS, MAX_HEIGHT, COLLISION_EPS, MAX_HEALTH, AIR_CONTROL_ACCEL
+  MOUSE_SENS, MAX_HEIGHT, COLLISION_EPS, MAX_HEALTH, AIR_CONTROL_ACCEL,
+  WORLD_BORDER_CHUNKS, CHUNK_SIZE
 } from './config.js';
 import { isSolid, heightAt } from './world.js';
+
+// how far from spawn the player can walk before hitting the world border
+const WORLD_LIMIT = WORLD_BORDER_CHUNKS * CHUNK_SIZE - 1;
 
 export const player = {
   pos: new THREE.Vector3(0, MAX_HEIGHT + 2, 0),
@@ -85,13 +89,6 @@ export function updatePlayer(dt, camera, onLand) {
       player.vel.x += moveX * AIR_CONTROL_ACCEL * dt;
       player.vel.z += moveZ * AIR_CONTROL_ACCEL * dt;
     }
-    // Cap horizontal air speed to MOVE_SPEED. Without this, holding a
-    // direction key through an entire jump arc keeps adding velocity every
-    // single frame with nothing pulling it back down -- so a jump held
-    // more than a few frames could build up far more speed than normal
-    // walking ever reaches, launching the player way further than
-    // intended. Clamping here means air control can steer/preserve
-    // momentum but never exceed the normal ground move speed.
     const airSpeed = Math.hypot(player.vel.x, player.vel.z);
     if (airSpeed > MOVE_SPEED) {
       const scale = MOVE_SPEED / airSpeed;
@@ -122,9 +119,8 @@ export function updatePlayer(dt, camera, onLand) {
   const newFeetY = newY - EYE_HEIGHT;
 
   if (player.vel.y <= 0) {
-    // falling: if body would intersect ground, snap feet to top of block
     if (collidesAt(player.pos.x, newFeetY, player.pos.z)) {
-      const impactSpeed = -player.vel.y; // speed at moment of landing
+      const impactSpeed = -player.vel.y;
       if (onLand) onLand(impactSpeed);
       player.pos.y = Math.floor(newFeetY + 0.5) + 0.5 + EYE_HEIGHT;
       player.vel.y = 0;
@@ -134,7 +130,6 @@ export function updatePlayer(dt, camera, onLand) {
       player.grounded = false;
     }
   } else {
-    // rising: if body would intersect a ceiling, stop upward motion
     if (collidesAt(player.pos.x, newFeetY, player.pos.z)) {
       player.vel.y = 0;
     } else {
@@ -147,6 +142,10 @@ export function updatePlayer(dt, camera, onLand) {
     player.pos.set(0.5, MAX_HEIGHT + 5, 0.5);
     player.vel.set(0, 0, 0);
   }
+
+  // world border -- invisible wall instead of walking into an unloaded void
+  player.pos.x = Math.max(-WORLD_LIMIT, Math.min(WORLD_LIMIT, player.pos.x));
+  player.pos.z = Math.max(-WORLD_LIMIT, Math.min(WORLD_LIMIT, player.pos.z));
 
   camera.position.copy(player.pos);
   camera.rotation.y = player.yaw;

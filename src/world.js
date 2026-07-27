@@ -1,4 +1,4 @@
-import { MAX_HEIGHT, CHUNK_SIZE } from './config.js';
+import { MAX_HEIGHT, CHUNK_SIZE, WORLD_BORDER_CHUNKS } from './config.js';
 
 // key "x,y,z" -> type string
 export const blocks = new Map();
@@ -65,6 +65,9 @@ const generatedChunks = new Set();
 const chunkKey = (cx, cz) => cx + ',' + cz;
 
 function generateChunk(cx, cz) {
+  // bounded world -- stop generating past the border instead of growing forever
+  if (Math.abs(cx) > WORLD_BORDER_CHUNKS || Math.abs(cz) > WORLD_BORDER_CHUNKS) return;
+
   const ck = chunkKey(cx, cz);
   if (generatedChunks.has(ck)) return;
   generatedChunks.add(ck);
@@ -91,8 +94,8 @@ function generateChunk(cx, cz) {
 }
 
 // generates every chunk within `radius` chunks of the chunk containing (x, z).
-// call this every time the player moves so the world keeps growing outward
-// forever instead of being generated once up front in a fixed bounding box.
+// call this every time the player moves so the world keeps filling in
+// outward until it hits WORLD_BORDER_CHUNKS.
 export function ensureChunksAround(x, z, radius) {
   const [cx, cz] = chunkOf(x, z);
   for (let dx = -radius; dx <= radius; dx++) {

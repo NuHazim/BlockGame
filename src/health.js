@@ -14,9 +14,8 @@ export function updateHealthUI() {
 }
 
 function flashDamage() {
-  // restart the CSS animation even if it's already mid-flash
   damageFlashEl.classList.remove('hit');
-  void damageFlashEl.offsetWidth; // force reflow so the class re-triggers
+  void damageFlashEl.offsetWidth;
   damageFlashEl.classList.add('hit');
 }
 
@@ -24,10 +23,17 @@ export function applyFallDamage(impactSpeed) {
   if (isCreative() || impactSpeed <= FALL_DAMAGE_THRESHOLD) return;
   player.health -= (impactSpeed - FALL_DAMAGE_THRESHOLD) * FALL_DAMAGE_SCALE;
   flashDamage();
-  if (player.health <= 0) {
-    // no death screen for this jam build -- just respawn at full health
-    placePlayerStart();
-  }
+  if (player.health <= 0) placePlayerStart();
+  updateHealthUI();
+}
+
+// generic damage entry point -- used by mob attacks (and reusable for any
+// future hazard) without those callers needing to know about respawn logic
+export function damagePlayer(amount) {
+  if (isCreative()) return;
+  player.health -= amount;
+  flashDamage();
+  if (player.health <= 0) placePlayerStart();
   updateHealthUI();
 }
 

@@ -15,6 +15,12 @@
     content: ''; position: absolute; background: rgba(255,255,255,0.85);
     box-shadow: 0 0 2px rgba(0,0,0,0.8);
   }
+  #itemTooltip {
+    position: fixed; transform: translate(-50%, -130%);
+    background: rgba(0,0,0,0.85); color: #fff; font-size: 12px;
+    padding: 4px 8px; border-radius: 5px; pointer-events: none;
+    white-space: nowrap; z-index: 30; display: none;
+  }
   #crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; }
   #crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; }
 
@@ -132,6 +138,7 @@
 <div id="modeLabel"></div>
 <div id="healthBar"><div id="healthFill"></div></div>
 <div id="hotbar"></div>
+<div id="itemTooltip"></div>
 <div id="blockPicker">
   <h1>Select Block</h1>
   <div id="pickerGrid"></div>

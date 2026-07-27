@@ -1,21 +1,11 @@
 import { DAY_LENGTH_SECONDS } from './config.js';
 
 // ---------- Day / night cycle ----------
-// Drives a sun and a moon that arc across the sky the way the real sun
-// does (rise on one horizon, overhead at "noon", set on the opposite
-// horizon, then the moon takes over for "night"), tied to a repeating
-// clock rather than a fast arbitrary flicker. Also drives the directional
-// light that casts real shadows, plus sky/fog color so it visibly reads
-// as day, dusk, night or dawn.
+// Drives a sun and a moon that arc across the sky, tied to a repeating
+// real-time clock. Runs identically in Creative and Survival now -- it used
+// to freeze at a fixed midday in Creative, but that's gone.
 
 const SUN_ORBIT_RADIUS = 150;
-// The visible disc is drawn much closer than the light itself. At 150 units
-// out, with the camera's near plane at 0.1, the depth buffer has almost no
-// precision left (that range is heavily skewed toward objects close to the
-// camera) -- so depthTest ends up unreliable and the sprite can fail to
-// draw at all. Keeping the sprite at a modest, fixed distance keeps its
-// depth well inside the precise part of the buffer, while still being much
-// farther out than any loaded terrain so blocks correctly occlude it.
 const SUN_SPRITE_DISTANCE = 130;
 
 const SKY_DAY = new THREE.Color(0x87ceeb);
@@ -27,9 +17,6 @@ function smoothstep(edge0, edge1, x) {
   return t * t * (3 - 2 * t);
 }
 
-// Soft radial-gradient disc with a glow halo, instead of a flat solid
-// square -- reads as a proper sun/moon instead of a floating tile.
-// depthTest stays on so blocks/terrain still occlude it correctly.
 function makeGlowSprite({ core, mid, edge, size = 256 }) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
@@ -51,7 +38,6 @@ export function initDayNight(scene, renderer) {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-  // ---------- Sun: shadow-casting directional light ----------
   const sunLight = new THREE.DirectionalLight(0xffffff, 1.1);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.set(2048, 2048);
@@ -65,7 +51,6 @@ export function initDayNight(scene, renderer) {
   scene.add(sunLight);
   scene.add(sunLight.target);
 
-  // ---------- Moon: dim fill light at night, no shadow (keeps cost low) ----------
   const moonLight = new THREE.DirectionalLight(0xaac4ff, 0);
   scene.add(moonLight);
   scene.add(moonLight.target);
@@ -98,22 +83,13 @@ export function initDayNight(scene, renderer) {
   const tmpMoonDir = new THREE.Vector3();
   const tmpPos = new THREE.Vector3();
 
-  function update(nowMs, playerPos, creative) {
-    // Creative mode is always daytime: freeze the cycle at a fixed
-    // midday timestamp instead of advancing with real time.
-    const effectiveMs = creative ? (DAY_LENGTH_SECONDS * 1000) / 4 : nowMs;
-    // 0..1 progress through one full day/night loop
-    const t = (effectiveMs / 1000 % DAY_LENGTH_SECONDS) / DAY_LENGTH_SECONDS;
+  function update(nowMs, playerPos) {
+    const t = (nowMs / 1000 % DAY_LENGTH_SECONDS) / DAY_LENGTH_SECONDS;
     const angle = t * Math.PI * 2;
 
-    // sun rises in +x, arcs overhead, sets in -x, tilted a bit toward +z
-    // so it doesn't pass through a flat plane directly overhead
     tmpSunDir.set(Math.cos(angle), Math.sin(angle), 0.35).normalize();
     tmpMoonDir.copy(tmpSunDir).negate();
 
-    // Light positions follow the player fully (including height) so the
-    // shadow camera, which is only sized to cover a small area, stays
-    // centered on them.
     tmpPos.copy(tmpSunDir).multiplyScalar(SUN_ORBIT_RADIUS).add(playerPos);
     sunLight.position.copy(tmpPos);
     sunLight.target.position.copy(playerPos);
@@ -122,12 +98,9 @@ export function initDayNight(scene, renderer) {
     moonLight.position.copy(tmpPos);
     moonLight.target.position.copy(playerPos);
 
-    // The visible sun/moon sprites, however, should NOT rise and fall with
-    // the player's own altitude (walking up a hill or jumping shouldn't
-    // visibly move the sun) and must stay well clear of the fixed-height
-    // cloud layer. So their vertical position is anchored to ground level
-    // (y=0) rather than to playerPos.y -- only x/z follow the player, to
-    // keep the sun centered as they roam.
+    // sprite height is anchored to ground level (y=0), not the player's
+    // current altitude, so walking up a hill doesn't visibly move the sun,
+    // and it stays correctly below the fixed-height cloud layer.
     sunSprite.position.set(
       playerPos.x + tmpSunDir.x * SUN_SPRITE_DISTANCE,
       tmpSunDir.y * SUN_SPRITE_DISTANCE,
@@ -139,21 +112,15 @@ export function initDayNight(scene, renderer) {
       playerPos.z + tmpMoonDir.z * SUN_SPRITE_DISTANCE
     );
 
-    const sunElevation = tmpSunDir.y;   // -1..1
+    const sunElevation = tmpSunDir.y;
     const moonElevation = tmpMoonDir.y;
 
-    // fade each disc out as it dips below the horizon instead of popping
     sunSprite.material.opacity = smoothstep(-0.06, 0.06, sunElevation);
     moonSprite.material.opacity = smoothstep(-0.06, 0.06, moonElevation);
 
-    // overall brightness: 0 at night, 1 once the sun is well clear of the horizon
     const dayAmount = smoothstep(-0.1, 0.35, sunElevation);
-    // warm tint that peaks right around sunrise/sunset, fades elsewhere
     const sunsetAmount = 1 - smoothstep(0, 0.3, Math.abs(sunElevation));
 
-    // sun disc itself warms and swells slightly near the horizon, like a
-    // real sunset -- purely cosmetic, driven by the same sunsetAmount used
-    // for lighting so they stay in sync.
     const sunScale = 34 + sunsetAmount * 14;
     sunSprite.scale.set(sunScale, sunScale, 1);
 

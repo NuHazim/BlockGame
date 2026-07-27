@@ -10,6 +10,15 @@ export const SEA_LEVEL = 5;
 export const SNOW_LEVEL = 21;
 export const RENDER_DISTANCE = 2;                     // chunk radius around the player -- 2 = 5x5 chunks rendered
 
+// The world used to generate infinitely outward forever, which was a big
+// source of the long-session lag. Real Minecraft's world border defaults to
+// ~60,000,000 blocks per side -- far too large to be a meaningful "cap" for
+// a browser game -- so this bounds the world to a fixed, generous radius
+// (in chunks) from spawn instead. Chunk generation just stops past this,
+// and the player can't walk past it either (see player.js). Raise it for
+// more room to roam, at the cost of more memory/meshing work overall.
+export const WORLD_BORDER_CHUNKS = 24; // 24*16 = 384 block radius (~768x768 total)
+
 export const GRAVITY = -22;
 export const JUMP_SPEED = 8.2;
 export const MOVE_SPEED = 6.0;
@@ -37,6 +46,12 @@ export const HEALTH_REGEN_RATE = 1.5;    // hp / second
 // ---------- Item drops ----------
 export const PICKUP_RADIUS = 1.1;
 export const STACK_RADIUS = 1.6; // drops of the same type this close merge into one stack
+
+// ---------- Mobs ----------
+export const MOB_SPAWN_INTERVAL = 6;      // seconds between spawn attempts
+export const MOB_MAX_COUNT = 12;          // cap on simultaneous mobs
+export const MOB_SPAWN_RADIUS = [12, 26]; // [min, max] distance from the player a mob can spawn at
+export const MOB_DESPAWN_RADIUS = 45;     // mobs farther than this from the player are removed
 
 // keys the game consumes -- suppressed while playing so the browser/iframe
 // doesn't scroll (Space) or trigger other default behavior.
