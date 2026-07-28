@@ -1,73 +1,94 @@
-// ---------- Light-emitting items ----------
-// Central registry for any block/item that emits light, so adding a new
-// glowing block later (lantern, glowstone, campfire...) is just one entry
-// here -- interaction.js and heldItem.js consult this registry generically
-// instead of special-casing block names.
+import { addLightSource, removeLightSource, clearLighting } from './lighting.js';
+import { markAllTypesDirty } from './meshBuilder.js';
+
+// `level` is a Minecraft-style light value (14 for a torch) that flood-fills
+// outward through open space via lighting.js, losing 1 per block. That's
+// what actually brightens nearby blocks now (through meshBuilder's baked
+// tiers) -- fully deterministic, no dependency on a real-time PointLight.
 export const LIGHT_EMITTERS = {
-  torch: { color: 0xffaa33, intensity: 1.4, distance: 9, flicker: 0.15, flickerSpeed: 14 }
-  // example for later:
-  // lantern: { color: 0xfff0c8, intensity: 1.8, distance: 11, flicker: 0.05, flickerSpeed: 6 }
+  torch: {
+    level: 14,
+    glowColor: '#ffcf6b',
+    glowEdge: 'rgba(255,140,20,0.55)',
+    glowSize: 0.55,
+    flicker: 0.06,
+    flickerSpeed: 10
+  }
 };
 
 export function isLightEmitter(type) {
   return !!LIGHT_EMITTERS[type];
 }
 
-// ---------- Placed-in-world lights ----------
-// One real PointLight per placed light-emitting block, since a block in the
-// `blocks` Map alone doesn't emit light in three.js. Keyed by position so
-// interaction.js can add/remove one exactly when a block is placed/mined.
-const worldLights = new Map(); // "x,y,z" -> PointLight
+// purely cosmetic flame glow -- unlit billboard sprite, same proven
+// technique as the sun/moon in dayNight.js, always visible regardless of
+// scene lighting state
+function makeFlameSprite(def, size = 64) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const c = size / 2;
+  const grad = ctx.createRadialGradient(c, c, 0, c, c, c);
+  grad.addColorStop(0, 'rgba(255,255,255,0.95)');
+  grad.addColorStop(0.25, def.glowColor);
+  grad.addColorStop(0.6, def.glowEdge);
+  grad.addColorStop(1, 'rgba(255,140,20,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: true });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(def.glowSize, def.glowSize, 1);
+  return sprite;
+}
+
+const worldGlows = new Map(); // "x,y,z" -> { sprite, def, baseScale }
 let sceneRef = null;
 
 export function initLightSources(scene) {
   sceneRef = scene;
-  worldLights.clear();
+  worldGlows.clear();
 }
 
 const key = (x, y, z) => x + ',' + y + ',' + z;
 
 export function addWorldLight(type, x, y, z) {
   const def = LIGHT_EMITTERS[type];
-  if (!def) return;
+  if (!def || !sceneRef) return;
   const k = key(x, y, z);
-  if (worldLights.has(k)) return;
-  const light = new THREE.PointLight(def.color, def.intensity, def.distance, 2);
-  light.position.set(x, y + 0.3, z);
-  light.userData.def = def;
-  sceneRef.add(light);
-  worldLights.set(k, light);
+  if (worldGlows.has(k)) return;
+
+  const sprite = makeFlameSprite(def);
+  sprite.position.set(x, y + 0.35, z);
+  sceneRef.add(sprite);
+  worldGlows.set(k, { sprite, def, baseScale: sprite.scale.x });
+
+  addLightSource(x, y, z, def.level);
+  markAllTypesDirty();
 }
 
 export function removeWorldLight(x, y, z) {
   const k = key(x, y, z);
-  const light = worldLights.get(k);
-  if (!light) return;
-  sceneRef.remove(light);
-  worldLights.delete(k);
+  const entry = worldGlows.get(k);
+  if (entry) {
+    sceneRef.remove(entry.sprite);
+    worldGlows.delete(k);
+  }
+  removeLightSource(x, y, z);
+  markAllTypesDirty();
 }
 
-// subtle per-light flicker so lit blocks feel alive rather than static --
-// call once per frame from the main loop
 export function updateLightFlicker(nowSec) {
-  for (const light of worldLights.values()) {
-    const def = light.userData.def;
-    light.intensity = def.intensity + Math.sin(nowSec * def.flickerSpeed + light.position.x * 3) * def.flicker;
+  for (const entry of worldGlows.values()) {
+    const { sprite, def, baseScale } = entry;
+    const flick = Math.sin(nowSec * def.flickerSpeed + sprite.position.x * 3) * def.flicker;
+    const s = baseScale * (1 + flick * 0.1);
+    sprite.scale.set(s, s, 1);
   }
 }
 
 export function clearWorldLights() {
-  for (const light of worldLights.values()) sceneRef.remove(light);
-  worldLights.clear();
-}
-
-// ---------- Held light source ----------
-// One light attached to whatever's in the player's hand right now (e.g.
-// holding a torch lights the area ahead of you). heldItem.js owns the
-// mesh/positioning; this just builds the light object itself when asked.
-export function makeHeldLight(type) {
-  const def = LIGHT_EMITTERS[type];
-  if (!def) return null;
-  const light = new THREE.PointLight(def.color, def.intensity, def.distance, 2);
-  return light;
+  for (const entry of worldGlows.values()) sceneRef.remove(entry.sprite);
+  worldGlows.clear();
+  clearLighting();
 }

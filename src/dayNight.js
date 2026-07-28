@@ -1,16 +1,17 @@
 import { DAY_LENGTH_SECONDS } from './config.js';
 
-// ---------- Day / night cycle ----------
-// Drives a sun and a moon that arc across the sky, tied to a repeating
-// real-time clock. Runs identically in Creative and Survival now -- it used
-// to freeze at a fixed midday in Creative, but that's gone.
-
 const SUN_ORBIT_RADIUS = 150;
-const SUN_SPRITE_DISTANCE = 130;
+// Kept close (well inside the camera's near/far precision-safe range) --
+// pushing this out past ~100 causes the depth buffer to lose enough
+// precision at that distance that depthTest becomes unreliable, making the
+// sun/moon sprite flicker or vanish exactly when centered in view. This
+// stays well beyond loaded terrain (RENDER_DISTANCE chunks) so it's never
+// wrongly occluded by nearby blocks.
+const SUN_SPRITE_DISTANCE = 80;
 
 const SKY_DAY = new THREE.Color(0x87ceeb);
 const SKY_SUNSET = new THREE.Color(0xff9a5c);
-const SKY_NIGHT = new THREE.Color(0x0a0e2a);
+const SKY_NIGHT = new THREE.Color(0x0b1230);
 
 function smoothstep(edge0, edge1, x) {
   const t = THREE.MathUtils.clamp((x - edge0) / (edge1 - edge0), 0, 1);
@@ -65,7 +66,7 @@ export function initDayNight(scene, renderer) {
     mid: 'rgba(255,224,140,0.95)',
     edge: 'rgba(255,170,60,0.35)'
   });
-  sunSprite.scale.set(34, 34, 1);
+  sunSprite.scale.set(30, 30, 1);
   sunSprite.frustumCulled = false;
   scene.add(sunSprite);
 
@@ -74,7 +75,7 @@ export function initDayNight(scene, renderer) {
     mid: 'rgba(210,222,245,0.9)',
     edge: 'rgba(160,180,220,0.28)'
   });
-  moonSprite.scale.set(22, 22, 1);
+  moonSprite.scale.set(20, 20, 1);
   moonSprite.frustumCulled = false;
   scene.add(moonSprite);
 
@@ -98,9 +99,6 @@ export function initDayNight(scene, renderer) {
     moonLight.position.copy(tmpPos);
     moonLight.target.position.copy(playerPos);
 
-    // sprite height is anchored to ground level (y=0), not the player's
-    // current altitude, so walking up a hill doesn't visibly move the sun,
-    // and it stays correctly below the fixed-height cloud layer.
     sunSprite.position.set(
       playerPos.x + tmpSunDir.x * SUN_SPRITE_DISTANCE,
       tmpSunDir.y * SUN_SPRITE_DISTANCE,
@@ -121,16 +119,15 @@ export function initDayNight(scene, renderer) {
     const dayAmount = smoothstep(-0.1, 0.35, sunElevation);
     const sunsetAmount = 1 - smoothstep(0, 0.3, Math.abs(sunElevation));
 
-    const sunScale = 34 + sunsetAmount * 14;
+    const sunScale = 30 + sunsetAmount * 12;
     sunSprite.scale.set(sunScale, sunScale, 1);
 
     sunLight.intensity = dayAmount * 1.1;
     sunLight.color.set(0xffffff).lerp(new THREE.Color(0xff9a5c), sunsetAmount * 0.85);
 
-    moonLight.intensity = (1 - dayAmount) * 0.22;
-
-    ambient.intensity = 0.12 + dayAmount * 0.18;
-    hemi.intensity = 0.15 + dayAmount * 0.4;
+    moonLight.intensity = (1 - dayAmount) * 0.25;
+    ambient.intensity = 0.1 + dayAmount * 0.22;
+    hemi.intensity = 0.14 + dayAmount * 0.42;
 
     skyColor.copy(SKY_NIGHT).lerp(SKY_DAY, dayAmount).lerp(SKY_SUNSET, sunsetAmount * 0.8);
     scene.background = skyColor;

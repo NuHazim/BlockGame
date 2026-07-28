@@ -1,6 +1,6 @@
 import { REACH } from './config.js';
 import { isSolid, getBlock, setBlock } from './world.js';
-import { markEditDirty } from './meshBuilder.js';
+import { markEditDirty, markAllTypesDirty } from './meshBuilder.js';
 import { player } from './player.js';
 import { HOTBAR } from './blocks.js';
 import { getSelectedIndex, updateHotbarUI } from './hotbar.js';
@@ -8,6 +8,7 @@ import { inventory, isCreative } from './inventory.js';
 import { spawnParticles, spawnDrop } from './effects.js';
 import { isWeapon } from './weapons.js';
 import { addWorldLight, removeWorldLight, isLightEmitter } from './lightSources.js';
+import { isNearAnySource, recomputeLighting } from './lighting.js';
 
 export const selectionBox = new THREE.LineSegments(
   new THREE.EdgesGeometry(new THREE.BoxGeometry(1.02, 1.02, 1.02)),
@@ -69,13 +70,27 @@ export function updateTargetBlock(camera) {
   }
 }
 
+// Ordinary block edits (not a light source itself) can still change what a
+// nearby torch's light reaches -- placing a wall blocks it, digging one
+// open lets it through. Only recompute if the edit is actually within
+// range of an existing source, so edits far from any torch stay free.
+function relightIfNeeded(x, y, z) {
+  if (!isNearAnySource(x, y, z)) return;
+  recomputeLighting();
+  markAllTypesDirty();
+}
+
 export function tryDestroy() {
   if (!targetBlock) return;
   const [x, y, z] = targetBlock;
   const removedType = getBlock(x, y, z);
   markEditDirty(x, y, z, removedType);
   setBlock(x, y, z, null);
-  if (isLightEmitter(removedType)) removeWorldLight(x, y, z);
+  if (isLightEmitter(removedType)) {
+    removeWorldLight(x, y, z); // handles its own lighting recompute + dirty
+  } else {
+    relightIfNeeded(x, y, z);
+  }
   spawnParticles(x, y, z, removedType);
   if (!isCreative()) {
     spawnDrop(x, y, z, removedType);
@@ -93,13 +108,11 @@ export function tryPlace() {
   if (overlapsPlayer) return;
 
   const newType = HOTBAR[getSelectedIndex()];
-  if (!newType || isWeapon(newType)) return; // empty slot, or a weapon -- nothing to place
+  if (!newType || isWeapon(newType)) return;
 
   if (!isCreative()) {
     if (inventory[newType] <= 0) return;
     inventory[newType]--;
-    // that was the last one -- clear the slot so it actually disappears
-    // from the hotbar instead of sitting there showing a "0" count
     if (inventory[newType] <= 0) {
       HOTBAR[getSelectedIndex()] = null;
     }
@@ -107,6 +120,10 @@ export function tryPlace() {
 
   setBlock(px, py, pz, newType);
   markEditDirty(px, py, pz, newType);
-  if (isLightEmitter(newType)) addWorldLight(newType, px, py, pz);
+  if (isLightEmitter(newType)) {
+    addWorldLight(newType, px, py, pz); // handles its own lighting recompute + dirty
+  } else {
+    relightIfNeeded(px, py, pz);
+  }
   if (!isCreative()) updateHotbarUI();
 }

@@ -14,7 +14,7 @@ import { initDayNight } from './dayNight.js';
 import { initClouds, updateClouds } from './clouds.js';
 import { WEAPON_TYPES, isWeapon } from './weapons.js';
 import { initMobs, updateMobs, trySpawnPass, damageMobsRaycast, clearMobs } from './mobs.js';
-import { initHeldItem, updateHeldItem, triggerSwing } from './heldItem.js';
+import { initHeldItem, updateHeldItem, triggerSwing, resetHeldLightTracking } from './heldItem.js';
 import { initLightSources, clearWorldLights, updateLightFlicker } from './lightSources.js';
 
 // ---------- Renderer / Scene ----------
@@ -29,7 +29,7 @@ scene.fog = new THREE.Fog(0x87ceeb, 40, 130);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 300);
 camera.rotation.order = 'YXZ';
-scene.add(camera); // needed so the held-item mesh/light (attached to the camera) actually renders
+scene.add(camera);
 
 const dayNight = initDayNight(scene, renderer);
 
@@ -79,6 +79,7 @@ function regenerateWorld() {
   clearEffects();
   clearMobs();
   clearWorldLights();
+  resetHeldLightTracking();
   rebuildTypes(Object.keys(BLOCK_TYPES));
 }
 
@@ -141,7 +142,7 @@ function animate() {
     updateMobs(dt, player.pos, damagePlayer);
     trySpawnPass(player.pos, dt, spawnState);
     const isMoving = keys['KeyW'] || keys['KeyA'] || keys['KeyS'] || keys['KeyD'];
-    updateHeldItem(dt, isMoving);
+    updateHeldItem(dt, isMoving, player.pos);
   }
 
   ensureChunksAround(player.pos.x, player.pos.z, RENDER_DISTANCE + 1);

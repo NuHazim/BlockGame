@@ -44,7 +44,9 @@ export function getChunkBlocks(cx, cz) {
 // new landscape instead of the same one every time
 let worldSeed = Math.floor(Math.random() * 100000);
 
-// simple deterministic pseudo-noise (no deps)
+// simple deterministic pseudo-noise (no deps) -- describes the ORIGINAL
+// generated terrain shape only. Do not use this for anything that needs to
+// reflect player edits (mining/building) -- use surfaceHeightAt for that.
 export function heightAt(x, z) {
   const s = worldSeed;
   const n =
@@ -53,6 +55,20 @@ export function heightAt(x, z) {
     Math.sin((x + z + s) * 0.06) * 3.0 +
     Math.cos((x - z + s) * 0.09) * 1.4;
   return Math.max(2, Math.floor(6 + n));
+}
+
+// actual top-of-world height at (x, z), reflecting any placed/mined blocks
+// -- used by mobs so they walk on the real current terrain (including
+// player edits) instead of the original generated shape. Returns the Y
+// position a foot standing on the surface should sit at (top solid + 1).
+export function surfaceHeightAt(x, z) {
+  const ix = Math.round(x), iz = Math.round(z);
+  for (let y = MAX_HEIGHT; y >= 0; y--) {
+    if (isSolid(ix, y, iz)) return y + 1;
+  }
+  // chunk not generated/loaded at this column yet -- fall back to the
+  // predicted terrain height so mobs don't fall through the world
+  return heightAt(x, z) + 1;
 }
 
 function chunkOrigin(cx, cz) {
@@ -93,9 +109,6 @@ function generateChunk(cx, cz) {
   for (const [x, y, z] of treeSpots) placeTree(x, y, z);
 }
 
-// generates every chunk within `radius` chunks of the chunk containing (x, z).
-// call this every time the player moves so the world keeps filling in
-// outward until it hits WORLD_BORDER_CHUNKS.
 export function ensureChunksAround(x, z, radius) {
   const [cx, cz] = chunkOf(x, z);
   for (let dx = -radius; dx <= radius; dx++) {
@@ -106,7 +119,7 @@ export function ensureChunksAround(x, z, radius) {
 }
 
 export function generateWorld() {
-  ensureChunksAround(0, 0, 2); // a patch of ground around spawn so first load isn't empty
+  ensureChunksAround(0, 0, 2);
 }
 
 function placeTree(x, y, z) {
@@ -126,8 +139,6 @@ function placeTree(x, y, z) {
   setBlock(x, top + 2, z, 'leaves');
 }
 
-// reseed + wipe + regrow terrain data only. Player/effects/meshes are each
-// their own module's job -- see main.js's regenerateWorld() for the full reset.
 export function regenerateTerrain() {
   worldSeed = Math.floor(Math.random() * 100000);
   blocks.clear();

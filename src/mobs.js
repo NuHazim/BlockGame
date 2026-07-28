@@ -1,5 +1,5 @@
 import { MOB_SPAWN_INTERVAL, MOB_MAX_COUNT, MOB_SPAWN_RADIUS, MOB_DESPAWN_RADIUS } from './config.js';
-import { heightAt, getBlock } from './world.js';
+import { surfaceHeightAt, getBlock, isSolid } from './world.js';
 
 export const MOB_TYPES = {
   zombie: {
@@ -9,9 +9,14 @@ export const MOB_TYPES = {
   }
 };
 
-const KNOCKBACK_FORCE = 6.5;     // initial push speed (units/sec) away from the hit
-const KNOCKBACK_DURATION = 0.28; // seconds the impulse overrides normal AI movement
-const KNOCKBACK_DECAY = 0.86;    // per-frame multiplier while the impulse is active
+const KNOCKBACK_FORCE = 6.5;
+const KNOCKBACK_DURATION = 0.28;
+const KNOCKBACK_DECAY = 0.86;
+
+// mob body footprint for wall collision -- roughly matches the visible
+// body box (0.6 wide) with a little clearance
+const MOB_HALF_WIDTH = 0.28;
+const MOB_BODY_HEIGHT = 1.1;
 
 const mobs = [];
 let sceneRef = null;
@@ -49,7 +54,7 @@ export function spawnMob(typeName, x, z) {
   const def = MOB_TYPES[typeName];
   if (!def || !sceneRef) return;
   const group = buildMobMesh(def);
-  group.position.set(x, heightAt(x, z) + 1, z);
+  group.position.set(x, surfaceHeightAt(x, z), z);
   sceneRef.add(group);
   mobs.push({
     type: typeName, def, group,
@@ -68,6 +73,26 @@ function pickWanderTarget(mob) {
     z: mob.group.position.z + Math.sin(angle) * dist
   };
   mob.wanderTimer = 3 + Math.random() * 3;
+}
+
+// AABB collision check against real solid blocks, so mobs stop at walls
+// instead of walking straight through them. `feetY` is the mob's own feet
+// height (mob.group.position.y is already feet-level -- see spawnMob).
+function mobCollides(x, feetY, z) {
+  const minX = Math.floor(x - MOB_HALF_WIDTH + 0.5);
+  const maxX = Math.floor(x + MOB_HALF_WIDTH + 0.5);
+  const minZ = Math.floor(z - MOB_HALF_WIDTH + 0.5);
+  const maxZ = Math.floor(z + MOB_HALF_WIDTH + 0.5);
+  const minY = Math.floor(feetY + 0.05 + 0.5);
+  const maxY = Math.floor(feetY + MOB_BODY_HEIGHT - 0.05 + 0.5);
+  for (let by = minY; by <= maxY; by++) {
+    for (let bx = minX; bx <= maxX; bx++) {
+      for (let bz = minZ; bz <= maxZ; bz++) {
+        if (isSolid(bx, by, bz)) return true;
+      }
+    }
+  }
+  return false;
 }
 
 export function updateMobs(dt, playerPos, damagePlayer) {
@@ -90,13 +115,11 @@ export function updateMobs(dt, playerPos, damagePlayer) {
       mob.group.userData.headMat.color.setHex(flashOn ? 0xffffff : mob.def.headColor);
     }
 
-    // a fresh hit shoves the mob back for a moment, overriding normal AI
-    // movement so the knockback actually reads instead of being cancelled
-    // out the same frame by the chase/wander logic below.
     if (mob.knockback.timer > 0) {
       mob.knockback.timer -= dt;
-      pos.x += mob.knockback.x * dt;
-      pos.z += mob.knockback.z * dt;
+      const kx = mob.knockback.x * dt, kz = mob.knockback.z * dt;
+      if (!mobCollides(pos.x + kx, pos.y, pos.z)) pos.x += kx;
+      if (!mobCollides(pos.x, pos.y, pos.z + kz)) pos.z += kz;
       mob.knockback.x *= KNOCKBACK_DECAY;
       mob.knockback.z *= KNOCKBACK_DECAY;
     } else {
@@ -120,20 +143,26 @@ export function updateMobs(dt, playerPos, damagePlayer) {
         const wd = Math.hypot(wx, wz);
         if (wd > 0.3) { moveX = wx / wd; moveZ = wz / wd; }
       }
+
       if (moveX || moveZ) {
-        pos.x += moveX * mob.def.speed * dt;
-        pos.z += moveZ * mob.def.speed * dt;
+        const stepX = moveX * mob.def.speed * dt;
+        const stepZ = moveZ * mob.def.speed * dt;
+        // move each axis independently so a mob sliding along a wall keeps
+        // whatever component of motion isn't blocked, instead of freezing
+        // entirely the instant either axis is obstructed
+        if (!mobCollides(pos.x + stepX, pos.y, pos.z)) pos.x += stepX;
+        if (!mobCollides(pos.x, pos.y, pos.z + stepZ)) pos.z += stepZ;
         mob.group.rotation.y = Math.atan2(moveX, moveZ);
       }
     }
 
-    const groundY = heightAt(pos.x, pos.z) + 1;
+    // follow the REAL current terrain (placed/mined blocks included), not
+    // the original generated shape -- smoothed so it doesn't teleport-snap
+    const groundY = surfaceHeightAt(pos.x, pos.z);
     pos.y += (groundY - pos.y) * Math.min(1, dt * 8);
   }
 }
 
-// finds the mob most centered in the camera's view within reach, damages
-// it, and applies knockback away from the camera.
 export function damageMobsRaycast(camera, reach, damage) {
   const camDir = new THREE.Vector3();
   camera.getWorldDirection(camDir);
@@ -174,8 +203,8 @@ export function trySpawnPass(playerPos, dt, state) {
   const dist = MOB_SPAWN_RADIUS[0] + Math.random() * (MOB_SPAWN_RADIUS[1] - MOB_SPAWN_RADIUS[0]);
   const x = Math.floor(playerPos.x + Math.cos(angle) * dist) + 0.5;
   const z = Math.floor(playerPos.z + Math.sin(angle) * dist) + 0.5;
-  const h = heightAt(x, z);
-  const groundType = getBlock(Math.round(x), h, Math.round(z));
+  const feetY = surfaceHeightAt(x, z);
+  const groundType = getBlock(Math.round(x), feetY - 1, Math.round(z));
   if (groundType === 'water') return;
 
   spawnMob('zombie', x, z);
