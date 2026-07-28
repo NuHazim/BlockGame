@@ -31,6 +31,20 @@ export const COLLISION_EPS = 0.001;
 
 export const MOUSE_SENS = 0.0022;
 
+// ---------- Swimming ----------
+// Water is non-solid for the player (see player.js's isBlocking) so it can
+// actually be swum through instead of walked on top of like a normal block.
+export const SWIM_SPEED = 3.2;         // normal swim speed, units/s
+export const SWIM_SPRINT_SPEED = 5.2;  // swim-sprint speed, toggled by double-tapping W while inWater
+export const SWIM_RISE_SPEED = 3.0;    // vertical rise speed while holding Space in water
+export const WATER_GRAVITY_SCALE = 0.25; // fraction of normal gravity applied while submerged (buoyancy)
+export const WATER_SINK_TERMINAL = -2.2; // max downward speed while in water -- slow sink, not a free-fall
+export const DOUBLE_TAP_WINDOW = 300;  // ms window for double-tap gestures (swim sprint, creative flight)
+
+// ---------- Flight (Creative only) ----------
+export const FLY_SPEED = 9;            // horizontal speed while flying
+export const FLY_VERTICAL_SPEED = 7;   // ascend/descend speed while flying (Space / Shift)
+
 // ---------- Day / night cycle ----------
 // how long one full sunrise-to-sunrise loop takes, in real seconds.
 // the sun/moon path itself (rise in +x, overhead at noon, set in -x) is
@@ -46,6 +60,9 @@ export const HEALTH_REGEN_RATE = 1.5;    // hp / second
 // ---------- Item drops ----------
 export const PICKUP_RADIUS = 1.1;
 export const STACK_RADIUS = 1.6; // drops of the same type this close merge into one stack
+
+// ---------- Mining ----------
+export const MINE_DURATION = 0.35; // seconds left click must be held on the same block before it breaks
 
 // ---------- Mobs ----------
 export const MOB_SPAWN_INTERVAL = 6;      // seconds between spawn attempts

@@ -1,4 +1,4 @@
-import { MOB_SPAWN_INTERVAL, MOB_MAX_COUNT, MOB_SPAWN_RADIUS, MOB_DESPAWN_RADIUS } from './config.js';
+import { MOB_SPAWN_INTERVAL, MOB_MAX_COUNT, MOB_SPAWN_RADIUS, MOB_DESPAWN_RADIUS, GRAVITY } from './config.js';
 import { surfaceHeightAt, getBlock, isSolid } from './world.js';
 
 export const MOB_TYPES = {
@@ -61,7 +61,9 @@ export function spawnMob(typeName, x, z) {
     health: def.health,
     wanderTarget: null, wanderTimer: 0,
     attackTimer: 0, hitFlash: 0,
-    knockback: { x: 0, z: 0, timer: 0 }
+    knockback: { x: 0, z: 0, timer: 0 },
+    vel: { x: 0, y: 0, z: 0 }, // vertical velocity for real gravity -- see updateMobs
+    grounded: false
   });
 }
 
@@ -78,6 +80,8 @@ function pickWanderTarget(mob) {
 // AABB collision check against real solid blocks, so mobs stop at walls
 // instead of walking straight through them. `feetY` is the mob's own feet
 // height (mob.group.position.y is already feet-level -- see spawnMob).
+// Also doubles as the vertical collision check (see updateMobs' gravity
+// step below), since it already takes an arbitrary feetY to test.
 function mobCollides(x, feetY, z) {
   const minX = Math.floor(x - MOB_HALF_WIDTH + 0.5);
   const maxX = Math.floor(x + MOB_HALF_WIDTH + 0.5);
@@ -156,10 +160,34 @@ export function updateMobs(dt, playerPos, damagePlayer) {
       }
     }
 
-    // follow the REAL current terrain (placed/mined blocks included), not
-    // the original generated shape -- smoothed so it doesn't teleport-snap
-    const groundY = surfaceHeightAt(pos.x, pos.z);
-    pos.y += (groundY - pos.y) * Math.min(1, dt * 8);
+    // Real gravity + vertical collision, instead of snapping to
+    // surfaceHeightAt every frame. The old approach read the ground height
+    // of a single column under the mob's rounded position -- whenever that
+    // column happened to land on a tree trunk (or the leaf canopy above
+    // it), the mob would "climb" straight up onto it and back down a
+    // moment later as it walked past. Falling/landing via actual per-axis
+    // collision (same approach as the player in player.js) means a mob can
+    // only ever change height by physically walking up something it
+    // collides with -- a tree trunk blocks it like a wall instead of
+    // teleporting it upward.
+    mob.vel.y += GRAVITY * dt;
+    const newY = pos.y + mob.vel.y * dt;
+    if (mob.vel.y <= 0) {
+      if (mobCollides(pos.x, newY, pos.z)) {
+        pos.y = Math.floor(newY + 0.5) + 1;
+        mob.vel.y = 0;
+        mob.grounded = true;
+      } else {
+        pos.y = newY;
+        mob.grounded = false;
+      }
+    } else {
+      if (mobCollides(pos.x, newY, pos.z)) {
+        mob.vel.y = 0;
+      } else {
+        pos.y = newY;
+      }
+    }
   }
 }
 

@@ -20,6 +20,19 @@ let targetBlock = null;
 let placeAt = null;
 const _dir = new THREE.Vector3();
 
+// Returns the currently targeted block's [x, y, z], or null. Used by
+// main.js to track hold-to-mine progress (see mining state in main.js).
+export function getTargetBlock() { return targetBlock; }
+
+// Water occupies a cell (isSolid returns true, since meshBuilder/lighting/
+// mobs still treat it as solid) but shouldn't be minable or block a raycast
+// the way a normal block does -- swimming through it should feel like
+// swimming through open space for interaction purposes, not like bumping
+// into glass.
+function isTargetable(x, y, z) {
+  return isSolid(x, y, z) && getBlock(x, y, z) !== 'water';
+}
+
 export function updateTargetBlock(camera) {
   camera.getWorldDirection(_dir);
   const ox = camera.position.x, oy = camera.position.y, oz = camera.position.z;
@@ -42,7 +55,7 @@ export function updateTargetBlock(camera) {
   placeAt = null;
   let lastEmpty = [vx, vy, vz];
 
-  if (isSolid(vx, vy, vz)) {
+  if (isTargetable(vx, vy, vz)) {
     targetBlock = [vx, vy, vz];
   } else {
     while (Math.min(tMaxX, tMaxY, tMaxZ) <= REACH) {
@@ -53,7 +66,7 @@ export function updateTargetBlock(camera) {
       } else {
         vz += stepZ; tMaxZ += tDeltaZ;
       }
-      if (isSolid(vx, vy, vz)) {
+      if (isTargetable(vx, vy, vz)) {
         targetBlock = [vx, vy, vz];
         placeAt = lastEmpty;
         break;
