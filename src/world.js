@@ -1,4 +1,4 @@
-import { MAX_HEIGHT, CHUNK_SIZE, WORLD_BORDER_CHUNKS } from './config.js';
+import { MAX_HEIGHT, CHUNK_SIZE, WORLD_BORDER_CHUNKS, SEA_LEVEL, SNOW_LEVEL } from './config.js';
 
 // key "x,y,z" -> type string
 export const blocks = new Map();
@@ -47,14 +47,33 @@ let worldSeed = Math.floor(Math.random() * 100000);
 // simple deterministic pseudo-noise (no deps) -- describes the ORIGINAL
 // generated terrain shape only. Do not use this for anything that needs to
 // reflect player edits (mining/building) -- use surfaceHeightAt for that.
+//
+// Layers three signals on top of the original rolling-hills noise:
+//  - base: the original gentle hill noise (unchanged)
+//  - mountainMask: low-frequency noise, only kept where positive and then
+//    squared, so it produces isolated peaks rather than a bumpy plateau
+//    everywhere. Pushes height well above SEA_LEVEL.
+//  - oceanMask: same idea mirrored (kept where negative), carving basins
+//    below SEA_LEVEL for oceans.
+// Everything is anchored around SEA_LEVEL so water/beaches/snow line up
+// with config.js's SEA_LEVEL/SNOW_LEVEL constants, and the whole thing is
+// clamped so mountains never poke through MAX_HEIGHT.
 export function heightAt(x, z) {
   const s = worldSeed;
-  const n =
+  const base =
     Math.sin((x + s) * 0.11) * 2.2 +
     Math.cos((z - s) * 0.13) * 2.2 +
     Math.sin((x + z + s) * 0.06) * 3.0 +
     Math.cos((x - z + s) * 0.09) * 1.4;
-  return Math.max(2, Math.floor(6 + n));
+
+  const mountainMask = Math.max(0, Math.sin((x + s * 1.7) * 0.015) * Math.cos((z - s * 1.3) * 0.017));
+  const mountain = mountainMask * mountainMask * 22; // squared -- keeps peaks isolated instead of everywhere
+
+  const oceanMask = Math.min(0, Math.sin((x - s * 1.3) * 0.014) * Math.cos((z + s * 1.9) * 0.016));
+  const ocean = oceanMask * 14; // negative -- carves basins below sea level
+
+  const h = Math.floor(SEA_LEVEL + 3 + base + mountain + ocean);
+  return Math.max(1, Math.min(MAX_HEIGHT - 2, h));
 }
 
 // actual top-of-world height at (x, z), reflecting any placed/mined blocks
@@ -93,14 +112,25 @@ function generateChunk(cx, cz) {
   for (let x = ox; x < ox + CHUNK_SIZE; x++) {
     for (let z = oz; z < oz + CHUNK_SIZE; z++) {
       const h = heightAt(x, z);
+      const underwater = h < SEA_LEVEL;
+      const snowy = h >= SNOW_LEVEL;
+      const topType = underwater ? 'sand' : (snowy ? 'snow' : 'grass');
+
       for (let y = 0; y <= h; y++) {
         let type;
-        if (y === h) type = 'grass';
-        else if (y >= h - 3) type = 'dirt';
+        if (y === h) type = topType;
+        else if (y >= h - 3) type = underwater ? 'sand' : 'dirt';
         else type = 'stone';
         setBlock(x, y, z, type);
       }
-      if (h < MAX_HEIGHT - 3 && Math.abs(x) > 2 && Math.abs(z) > 2) {
+
+      // fill the basin up to sea level with water so oceans actually appear
+      if (underwater) {
+        for (let y = h + 1; y <= SEA_LEVEL; y++) setBlock(x, y, z, 'water');
+      }
+
+      // trees only spawn on dry, non-snowy grass
+      if (!underwater && !snowy && h < MAX_HEIGHT - 3 && Math.abs(x) > 2 && Math.abs(z) > 2) {
         const rnd = Math.abs(Math.sin((x + worldSeed) * 12.9898 + z * 78.233) * 43758.5453) % 1;
         if (rnd > 0.965) treeSpots.push([x, h + 1, z]);
       }
