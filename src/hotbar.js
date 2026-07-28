@@ -47,6 +47,20 @@ export function scrollSlot(dir) {
   selectSlot((selectedIndex + dir + HOTBAR.length) % HOTBAR.length);
 }
 
+// Called when a block/item is picked up (see effects.js's updateDrops).
+// If that type is already sitting in a hotbar slot, its count badge just
+// updates on its own -- nothing to do here. Otherwise, drop it into the
+// first empty slot so it shows up immediately without opening the picker.
+// If every slot is full, it silently stays inventory-only (still pickable
+// via the block picker) -- never bumps something already equipped.
+export function autoAssignPickup(type) {
+  if (HOTBAR.includes(type)) return;
+  const emptyIndex = HOTBAR.indexOf(null);
+  if (emptyIndex !== -1) {
+    HOTBAR[emptyIndex] = type;
+  }
+}
+
 export function updateHotbarUI() {
   const slotEls = hotbarEl.querySelectorAll('.slot');
   slotEls.forEach((slot, i) => {

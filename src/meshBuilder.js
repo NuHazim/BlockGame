@@ -6,7 +6,7 @@ import { getBlockLight } from './lighting.js';
 
 export const geometry = new THREE.BoxGeometry(BLOCK, BLOCK, BLOCK);
 
-const FACE_BRIGHTNESS = [0.86, 0.72, 1.00, 0.55, 0.80, 0.66]; // +x -x +y -y +z -z
+const FACE_BRIGHTNESS = [0.86, 0.72, 1.00, 0.55, 0.80, 0.66];
 
 function bakeFaceShading(geo, mult = 1) {
   const count = geo.attributes.position.count;
@@ -26,34 +26,21 @@ export const torchGeometry = new THREE.BoxGeometry(0.18, 0.7, 0.18);
 torchGeometry.translate(0, -0.15, 0);
 bakeFaceShading(torchGeometry);
 
-// ---------- Block-light tiers ----------
-// A block whose computed light level (from lighting.js) is > 0 renders via
-// a SEPARATE unlit (MeshBasicMaterial) instanced mesh instead of the
-// normal day/night-lit one. MeshBasicMaterial ignores the scene's real-time
-// lights entirely -- its vertex color IS the final brightness -- so a block
-// near a torch is now guaranteed visibly bright regardless of time of day,
-// with no dependency on how a dynamic PointLight happens to interact with
-// this project's instanced/vertex-colored materials.
-const LIGHT_TIERS = [
-  { max: 4,  mult: 0.55 }, // dim, edge of torchlight
-  { max: 9,  mult: 0.85 }, // mid-range
-  { max: 14, mult: 1.05 }  // right next to the source
-];
+// Single lit tier: any block touched by torchlight (level > 0) renders at
+// one fixed brightness via the unlit bucket. Toned down from 1.05 to 0.85
+// so it reads as "lit" without blowing out to near-white.
+const LIT_BRIGHTNESS_MULT = 0.85;
 
-function tierIndexForLevel(level) {
-  if (level <= 0) return -1;
-  for (let i = 0; i < LIGHT_TIERS.length; i++) {
-    if (level <= LIGHT_TIERS[i].max) return i;
-  }
-  return LIGHT_TIERS.length - 1;
+function isLit(level) {
+  return level > 0;
 }
 
-const litGeomCache = {};
-function getLitGeometry(isTorch, tier) {
-  const cacheKey = (isTorch ? 'torch' : 'block') + tier;
+let litGeomCache = { block: null, torch: null };
+function getLitGeometry(isTorch) {
+  const cacheKey = isTorch ? 'torch' : 'block';
   if (litGeomCache[cacheKey]) return litGeomCache[cacheKey];
   const geo = (isTorch ? torchGeometry : geometry).clone();
-  bakeFaceShading(geo, LIGHT_TIERS[tier].mult);
+  bakeFaceShading(geo, LIT_BRIGHTNESS_MULT);
   litGeomCache[cacheKey] = geo;
   return geo;
 }
@@ -64,17 +51,16 @@ function primaryTileFor(type) {
 }
 
 const litMatCache = {};
-function getLitMaterial(type, tier) {
-  const cacheKey = type + ':' + tier;
-  if (litMatCache[cacheKey]) return litMatCache[cacheKey];
+function getLitMaterial(type) {
+  if (litMatCache[type]) return litMatCache[type];
   const tex = tileTexture(primaryTileFor(type));
   const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, map: tex, vertexColors: true });
-  litMatCache[cacheKey] = mat;
+  litMatCache[type] = mat;
   return mat;
 }
 
 export const meshGroup = new THREE.Group();
-const meshes = {}; // bucket key -> InstancedMesh
+const meshes = {};
 const dummy = new THREE.Object3D();
 
 let dirtyTypes = new Set();
@@ -100,9 +86,9 @@ function neighborsAllOccluding(x, y, z) {
 }
 
 export function rebuildTypes(types) {
-  const grouped = {};    // type -> normal (day/night-lit) instances
-  const groupedLit = {}; // type -> [tier0 instances, tier1, tier2]
-  for (const t of types) { grouped[t] = []; groupedLit[t] = [[], [], []]; }
+  const grouped = {};
+  const groupedLit = {};
+  for (const t of types) { grouped[t] = []; groupedLit[t] = []; }
 
   function consider(k, type) {
     if (!(type in grouped)) return;
@@ -114,8 +100,7 @@ export function rebuildTypes(types) {
     if (!NON_OCCLUDING_BLOCKS.has(type) && neighborsAllOccluding(x, y, z)) return;
 
     const level = getBlockLight(x, y, z);
-    const tier = tierIndexForLevel(level);
-    if (tier >= 0) groupedLit[type][tier].push([x, y, z]);
+    if (isLit(level)) groupedLit[type].push([x, y, z]);
     else grouped[type].push([x, y, z]);
   }
 
@@ -155,9 +140,7 @@ export function rebuildTypes(types) {
     const isTorch = t === 'torch';
     const baseGeo = isTorch ? torchGeometry : geometry;
     buildBucket(t, grouped[t], baseGeo, materials[t]);
-    for (let tier = 0; tier < LIGHT_TIERS.length; tier++) {
-      buildBucket(t + ':lit' + tier, groupedLit[t][tier], getLitGeometry(isTorch, tier), getLitMaterial(t, tier));
-    }
+    buildBucket(t + ':lit', groupedLit[t], getLitGeometry(isTorch), getLitMaterial(t));
   }
 }
 
@@ -177,9 +160,6 @@ export function markEditDirty(x, y, z, ownType) {
   for (const t of nb) if (t) dirtyTypes.add(t);
 }
 
-// Marks every tracked type dirty -- used after a lighting change (placing/
-// removing a light source), since that can shift the tier bucket of many
-// blocks at once, not just ones immediately adjacent to the edit.
 export function markAllTypesDirty() {
   for (const t in materials) dirtyTypes.add(t);
 }

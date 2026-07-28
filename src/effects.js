@@ -2,23 +2,18 @@ import { GRAVITY, PICKUP_RADIUS, STACK_RADIUS, EYE_HEIGHT } from './config.js';
 import { BLOCK_TYPES } from './blocks.js';
 import { player } from './player.js';
 import { inventory } from './inventory.js';
-import { updateHotbarUI } from './hotbar.js';
+import { updateHotbarUI, autoAssignPickup } from './hotbar.js';
 
 let sceneRef = null;
 export function initEffects(scene) { sceneRef = scene; }
 
-// ---------- Item drops (survival-mode block pickups) ----------
-// small floating cubes spawned where a block was broken in survival mode;
-// walking near one collects it into the inventory. Creative mode never
-// spawns these -- blocks there just vanish (see interaction.js).
 const dropGeometry = new THREE.BoxGeometry(0.35, 0.35, 0.35);
 const dropMaterials = {};
 for (const t in BLOCK_TYPES) dropMaterials[t] = new THREE.MeshBasicMaterial({ color: BLOCK_TYPES[t].color });
 
-const drops = []; // { mesh, type, count, baseY, phase }
+const drops = [];
 
 export function spawnDrop(x, y, z, type) {
-  // merge into a nearby stack of the same type instead of piling up meshes
   for (const d of drops) {
     if (d.type !== type) continue;
     const dx = d.mesh.position.x - x, dz = d.mesh.position.z - z, dy = d.baseY - y;
@@ -36,7 +31,6 @@ export function spawnDrop(x, y, z, type) {
 
 export function updateDrops(dt, nowSec) {
   if (drops.length === 0) return;
-  // pickup point roughly at the player's feet+torso, not the eye
   const feetY = player.pos.y - EYE_HEIGHT;
   for (let i = drops.length - 1; i >= 0; i--) {
     const d = drops[i];
@@ -49,14 +43,16 @@ export function updateDrops(dt, nowSec) {
       sceneRef.remove(d.mesh);
       drops.splice(i, 1);
       inventory[d.type] += d.count;
+      // put it in an empty hotbar slot right away if it isn't equipped
+      // anywhere yet; falls back to inventory-only if the bar is full
+      autoAssignPickup(d.type);
       updateHotbarUI();
     }
   }
 }
 
-// ---------- Break particles (purely cosmetic, both modes) ----------
 const particleGeometry = new THREE.BoxGeometry(0.12, 0.12, 0.12);
-const particles = []; // { mesh, vel, life, maxLife }
+const particles = [];
 
 export function spawnParticles(x, y, z, type) {
   const n = 6 + Math.floor(Math.random() * 3);
@@ -87,7 +83,7 @@ export function updateParticles(dt) {
       particles.splice(i, 1);
       continue;
     }
-    p.vel.y += GRAVITY * 0.4 * dt; // lighter than player gravity, floatier puff
+    p.vel.y += GRAVITY * 0.4 * dt;
     p.mesh.position.addScaledVector(p.vel, dt);
     const t = p.life / p.maxLife;
     p.mesh.material.opacity = 1 - t;
@@ -95,7 +91,6 @@ export function updateParticles(dt) {
   }
 }
 
-// wipe all drops/particles -- called on world regenerate
 export function clearEffects() {
   for (const d of drops) sceneRef.remove(d.mesh);
   drops.length = 0;

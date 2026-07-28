@@ -1,17 +1,13 @@
 import { addLightSource, removeLightSource, clearLighting } from './lighting.js';
 import { markAllTypesDirty } from './meshBuilder.js';
 
-// `level` is a Minecraft-style light value (14 for a torch) that flood-fills
-// outward through open space via lighting.js, losing 1 per block. That's
-// what actually brightens nearby blocks now (through meshBuilder's baked
-// tiers) -- fully deterministic, no dependency on a real-time PointLight.
 export const LIGHT_EMITTERS = {
   torch: {
-    level: 14,
+    level: 9,          // was 14 -- shorter reach, closer to a cozy campfire radius than a floodlight
     glowColor: '#ffcf6b',
-    glowEdge: 'rgba(255,140,20,0.55)',
-    glowSize: 0.55,
-    flicker: 0.06,
+    glowEdge: 'rgba(255,140,20,0.45)', // slightly softer edge
+    glowSize: 0.45,     // was 0.55 -- smaller flame glow to match the toned-down range
+    flicker: 0.05,
     flickerSpeed: 10
   }
 };
@@ -20,16 +16,13 @@ export function isLightEmitter(type) {
   return !!LIGHT_EMITTERS[type];
 }
 
-// purely cosmetic flame glow -- unlit billboard sprite, same proven
-// technique as the sun/moon in dayNight.js, always visible regardless of
-// scene lighting state
 function makeFlameSprite(def, size = 64) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
   const c = size / 2;
   const grad = ctx.createRadialGradient(c, c, 0, c, c, c);
-  grad.addColorStop(0, 'rgba(255,255,255,0.95)');
+  grad.addColorStop(0, 'rgba(255,255,255,0.9)');
   grad.addColorStop(0.25, def.glowColor);
   grad.addColorStop(0.6, def.glowEdge);
   grad.addColorStop(1, 'rgba(255,140,20,0)');
@@ -42,7 +35,7 @@ function makeFlameSprite(def, size = 64) {
   return sprite;
 }
 
-const worldGlows = new Map(); // "x,y,z" -> { sprite, def, baseScale }
+const worldGlows = new Map();
 let sceneRef = null;
 
 export function initLightSources(scene) {
