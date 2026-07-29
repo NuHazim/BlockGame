@@ -113,6 +113,15 @@
     100% { opacity: 0; }
   }
 
+  /* Blue submersion tint, toggled on/off by main.js based on player.inWater
+     -- gives the classic Minecraft "screen goes blue underwater" look to
+     complement the translucent water blocks themselves. */
+  #underwaterOverlay {
+    position: fixed; inset: 0; pointer-events: none; z-index: 8;
+    background: linear-gradient(rgba(50,110,200,0.14), rgba(30,80,170,0.22));
+    opacity: 0; transition: opacity 0.4s ease;
+  }
+
   .menu-btn {
     margin: 6px 0; padding: 10px 28px; min-width: 200px;
     font-size: 15px; font-family: inherit; color: #fff; cursor: pointer;
@@ -134,6 +143,7 @@
 <canvas id="c"></canvas>
 <div id="crosshair"></div>
 <div id="fps"></div>
+<div id="underwaterOverlay"></div>
 <div id="damageFlash"></div>
 <div id="modeLabel"></div>
 <div id="healthBar"><div id="healthFill"></div></div>
@@ -158,10 +168,13 @@
     <table>
       <tr><td class="key">WASD</td><td>Move</td></tr>
       <tr><td class="key">Mouse</td><td>Look around</td></tr>
-      <tr><td class="key">Space</td><td>Jump</td></tr>
-      <tr><td class="key">Left click</td><td>Destroy block</td></tr>
+      <tr><td class="key">Space</td><td>Jump / swim up / fly up</td></tr>
+      <tr><td class="key">Double-tap W</td><td>Swim sprint (while in water)</td></tr>
+      <tr><td class="key">Double-tap Space</td><td>Toggle flight (Creative only)</td></tr>
+      <tr><td class="key">Shift</td><td>Fly down (while flying)</td></tr>
+      <tr><td class="key">Hold left click</td><td>Destroy block</td></tr>
       <tr><td class="key">Right click</td><td>Place block</td></tr>
-      <tr><td class="key">1 – 5</td><td>Select block type</td></tr>
+      <tr><td class="key">1 – 9</td><td>Select block type</td></tr>
       <tr><td class="key">B</td><td>Open block picker</td></tr>
       <tr><td class="key">C</td><td>Toggle Creative / Survival</td></tr>
       <tr><td class="key">Esc</td><td>Pause / menu</td></tr>

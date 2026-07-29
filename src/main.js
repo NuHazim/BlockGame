@@ -28,7 +28,15 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 40, 130);
+
+// Fog distances swap between these two sets depending on whether the
+// player is underwater (see the animate loop) -- Minecraft's underwater
+// fog is short-range and blue-tinted, versus the normal hazy sky-colored
+// fog on land.
+const SURFACE_FOG_NEAR = 40, SURFACE_FOG_FAR = 130;
+const UNDERWATER_FOG_NEAR = 6, UNDERWATER_FOG_FAR = 70; // was 0.5/16 -- far too short, choked visibility while swimming
+const UNDERWATER_FOG_COLOR = 0x3f79e0;
+scene.fog = new THREE.Fog(0x87ceeb, SURFACE_FOG_NEAR, SURFACE_FOG_FAR);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 300);
 camera.rotation.order = 'YXZ';
@@ -66,6 +74,8 @@ initMenu(canvas, {
 updateModeLabel(isCreative());
 updateModeButtonLabel(isCreative());
 updateHealthUI();
+
+const underwaterOverlayEl = document.getElementById('underwaterOverlay');
 
 function applyCreative(on) {
   setCreative(on);
@@ -218,6 +228,21 @@ function animate() {
   dayNight.update(now, player.pos);
   updateClouds(dt, player.pos);
   updateLightFlicker(now / 1000);
+
+  // Underwater atmosphere: tighter blue-tinted fog + a screen tint overlay,
+  // applied after dayNight.update() so it overrides that frame's normal
+  // sky-fog color rather than fighting it. Restored to the surface values
+  // the instant the player isn't submerged.
+  if (player.inWater) {
+    scene.fog.color.setHex(UNDERWATER_FOG_COLOR);
+    scene.fog.near = UNDERWATER_FOG_NEAR;
+    scene.fog.far = UNDERWATER_FOG_FAR;
+    if (underwaterOverlayEl) underwaterOverlayEl.style.opacity = '1';
+  } else {
+    scene.fog.near = SURFACE_FOG_NEAR;
+    scene.fog.far = SURFACE_FOG_FAR;
+    if (underwaterOverlayEl) underwaterOverlayEl.style.opacity = '0';
+  }
 
   renderer.render(scene, camera);
 

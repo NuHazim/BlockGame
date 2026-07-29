@@ -1,7 +1,7 @@
 import { BLOCK, RENDER_DISTANCE } from './config.js';
 import { materials, tileTexture } from './atlas.js';
 import { BLOCK_TYPES, NON_OCCLUDING_BLOCKS } from './blocks.js';
-import { blocks, getBlock, chunkOf, getChunkBlocks } from './world.js';
+import { blocks, getBlock, isSolid, chunkOf, getChunkBlocks } from './world.js';
 import { getBlockLight } from './lighting.js';
 
 export const geometry = new THREE.BoxGeometry(BLOCK, BLOCK, BLOCK);
@@ -25,6 +25,37 @@ bakeFaceShading(geometry);
 export const torchGeometry = new THREE.BoxGeometry(0.18, 0.7, 0.18);
 torchGeometry.translate(0, -0.15, 0);
 bakeFaceShading(torchGeometry);
+
+// ---------- Water surface geometry ----------
+// Water no longer renders as a full cube per cell -- a solid-sided box made
+// the shoreline/side view look like a chunky blue wall, which read as
+// "ugly" even after fixing the transparency/culling issues. Instead, only
+// the topmost water cell in each column (the one actually exposed to air
+// above it) gets a thin flat plane sitting at the top of that cell. Every
+// other water cell (the water beneath the surface, still tracked normally
+// for swimming physics in player.js) renders nothing at all. This trades
+// away seeing blue on the sides of underwater walls/caves for a much
+// cleaner, non-boxy surface -- closer to a simple pond/ocean top layer.
+const WATER_SURFACE_THICKNESS = 0.12;
+let waterSurfaceGeometry = null;
+function getWaterSurfaceGeometry() {
+  if (waterSurfaceGeometry) return waterSurfaceGeometry;
+  const geo = new THREE.BoxGeometry(1, WATER_SURFACE_THICKNESS, 1);
+  // cell spans -0.5..+0.5 in Y -- shift the thin slab up to the very top of
+  // that span so it reads as a surface layer, not a slab floating mid-block
+  geo.translate(0, 0.5 - WATER_SURFACE_THICKNESS / 2, 0);
+  bakeFaceShading(geo, 1);
+  waterSurfaceGeometry = geo;
+  return geo;
+}
+let waterSurfaceLitGeometry = null;
+function getWaterSurfaceLitGeometry() {
+  if (waterSurfaceLitGeometry) return waterSurfaceLitGeometry;
+  const geo = getWaterSurfaceGeometry().clone();
+  bakeFaceShading(geo, LIT_BRIGHTNESS_MULT);
+  waterSurfaceLitGeometry = geo;
+  return geo;
+}
 
 // Single lit tier: any block touched by torchlight (level > 0) renders at
 // one fixed brightness via the unlit bucket. Toned down from 1.05 to 0.85
@@ -53,6 +84,20 @@ function primaryTileFor(type) {
 const litMatCache = {};
 function getLitMaterial(type) {
   if (litMatCache[type]) return litMatCache[type];
+
+  if (type === 'water') {
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x5aa8ff,
+      transparent: true,
+      opacity: 0.66,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      vertexColors: true
+    });
+    litMatCache[type] = mat;
+    return mat;
+  }
+
   const tex = tileTexture(primaryTileFor(type));
   const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, map: tex, vertexColors: true });
   litMatCache[type] = mat;
@@ -74,21 +119,30 @@ export function updateRenderCenter(x, z) {
   }
 }
 
-function isOccluding(x, y, z) {
-  const t = getBlock(x, y, z);
-  return t != null && !NON_OCCLUDING_BLOCKS.has(t);
+// Water is excluded here too -- it's never part of the normal cube-culling
+// pipeline anymore, handled separately below via the surface-only pass.
+function isOccluding(t) {
+  return t != null && t !== 'torch' && t !== 'water';
 }
 
 function neighborsAllOccluding(x, y, z) {
-  return isOccluding(x + 1, y, z) && isOccluding(x - 1, y, z) &&
-         isOccluding(x, y + 1, z) && isOccluding(x, y - 1, z) &&
-         isOccluding(x, y, z + 1) && isOccluding(x, y, z - 1);
+  return isOccluding(getBlock(x + 1, y, z)) && isOccluding(getBlock(x - 1, y, z)) &&
+         isOccluding(getBlock(x, y + 1, z)) && isOccluding(getBlock(x, y - 1, z)) &&
+         isOccluding(getBlock(x, y, z + 1)) && isOccluding(getBlock(x, y, z - 1));
 }
 
-export function rebuildTypes(types) {
+export function rebuildTypes(typesInput) {
+  // flushDirty() passes a Set here, but Set has no .filter()/.includes() --
+  // that mismatch threw on the very first frame that marked anything dirty
+  // (i.e. almost immediately), which killed the render loop before a
+  // single frame ever drew -- this is what caused the pitch-black screen.
+  const types = Array.isArray(typesInput) ? typesInput : Array.from(typesInput);
+  const nonWaterTypes = types.filter((t) => t !== 'water');
+  const includeWater = types.includes('water');
+
   const grouped = {};
   const groupedLit = {};
-  for (const t of types) { grouped[t] = []; groupedLit[t] = []; }
+  for (const t of nonWaterTypes) { grouped[t] = []; groupedLit[t] = []; }
 
   function consider(k, type) {
     if (!(type in grouped)) return;
@@ -104,17 +158,40 @@ export function rebuildTypes(types) {
     else grouped[type].push([x, y, z]);
   }
 
+  const waterSurface = [];
+  const waterSurfaceLit = [];
+
+  function considerWater(k, type) {
+    if (type !== 'water') return;
+    const x = +k.slice(0, k.indexOf(','));
+    const rest = k.slice(k.indexOf(',') + 1);
+    const y = +rest.slice(0, rest.indexOf(','));
+    const z = +rest.slice(rest.indexOf(',') + 1);
+
+    if (isSolid(x, y + 1, z)) return; // covered from above (more water, or a solid block) -- nothing to see
+
+    const level = getBlockLight(x, y, z);
+    if (isLit(level)) waterSurfaceLit.push([x, y, z]);
+    else waterSurface.push([x, y, z]);
+  }
+
   if (centerChunk) {
     const [ccx, ccz] = centerChunk;
     for (let dcx = -RENDER_DISTANCE; dcx <= RENDER_DISTANCE; dcx++) {
       for (let dcz = -RENDER_DISTANCE; dcz <= RENDER_DISTANCE; dcz++) {
         const cm = getChunkBlocks(ccx + dcx, ccz + dcz);
         if (!cm) continue;
-        for (const [k, type] of cm) consider(k, type);
+        for (const [k, type] of cm) {
+          consider(k, type);
+          if (includeWater) considerWater(k, type);
+        }
       }
     }
   } else {
-    for (const [k, type] of blocks) consider(k, type);
+    for (const [k, type] of blocks) {
+      consider(k, type);
+      if (includeWater) considerWater(k, type);
+    }
   }
 
   function buildBucket(bucketKey, list, geo, mat) {
@@ -136,11 +213,16 @@ export function rebuildTypes(types) {
     meshes[bucketKey] = mesh;
   }
 
-  for (const t of types) {
+  for (const t of nonWaterTypes) {
     const isTorch = t === 'torch';
     const baseGeo = isTorch ? torchGeometry : geometry;
     buildBucket(t, grouped[t], baseGeo, materials[t]);
     buildBucket(t + ':lit', groupedLit[t], getLitGeometry(isTorch), getLitMaterial(t));
+  }
+
+  if (includeWater) {
+    buildBucket('water', waterSurface, getWaterSurfaceGeometry(), materials.water);
+    buildBucket('water:lit', waterSurfaceLit, getWaterSurfaceLitGeometry(), getLitMaterial('water'));
   }
 }
 

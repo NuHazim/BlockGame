@@ -54,6 +54,26 @@ function buildMaterial(faces) {
 export const materials = {};
 for (const t in BLOCK_TYPES) materials[t] = buildMaterial(BLOCK_TYPES[t].faces);
 
+// ---------- Water override ----------
+// A solid, opaque, textured cube reads as "blue wool" and -- since a
+// THREE.BoxGeometry's faces are single-sided by default -- standing INSIDE
+// one (i.e. swimming) means you're looking at the un-rendered backs of its
+// own faces, so you see straight through to whatever's beyond it. Water
+// needs to be translucent (so light/blocks read through it, like
+// Minecraft) and double-sided (so it still renders correctly from inside
+// the volume). Tuned toward Minecraft's fairly saturated water blue rather
+// than a washed-out pastel. vertexColors stays on so the shared box
+// geometry's baked per-face shading still gives it some directional depth.
+export const waterMaterial = new THREE.MeshLambertMaterial({
+  color: 0x3f79e0,
+  transparent: true,
+  opacity: 0.62,
+  depthWrite: false, // avoids transparent water fighting itself/the seafloor in the depth buffer
+  side: THREE.DoubleSide,
+  vertexColors: true
+});
+materials.water = waterMaterial;
+
 // ---------- Icons (hotbar / block picker) ----------
 function tileDataURL(tileName) {
   const { col, row } = TILE_UV[tileName];

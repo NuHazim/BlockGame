@@ -13,11 +13,12 @@ export const BLOCK_TYPES = {
 };
 
 // Block types that occupy a cell (solid for placement/collision/targeting)
-// but should NOT count as "blocking" a neighboring block's visibility.
-// A torch is thin -- if it counted as a full occluder the same way stone
-// does, placing one next to a block could make that block's last exposed
-// face register as "surrounded," causing the whole block to be culled
-// from the mesh and vanish. See meshBuilder.js's isOccluding().
+// but should NOT count as "blocking" a neighboring block's visibility --
+// a torch is thin, so a block next to one shouldn't get treated as fully
+// surrounded and culled. (Water used to live in this set too, but water's
+// occlusion rules are asymmetric -- it hides other water but not solid
+// blocks -- so it's handled directly in meshBuilder.js's occludesFace()
+// instead of this simple always-ignore set.)
 export const NON_OCCLUDING_BLOCKS = new Set(['torch']);
 
 // 9 hotbar slots, all empty by default.

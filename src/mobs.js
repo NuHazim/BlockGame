@@ -18,6 +18,18 @@ const KNOCKBACK_DECAY = 0.86;
 const MOB_HALF_WIDTH = 0.28;
 const MOB_BODY_HEIGHT = 1.1;
 
+// Epsilon shrinks the tested body span slightly so a mob resting exactly on
+// a surface doesn't register the block it's standing on as a collision.
+// This used to be 0.05 -- fine for a one-off horizontal wall check, but far
+// too coarse for the per-frame vertical landing check added below: a single
+// frame's gravity-driven fall is much smaller than 0.05, so the old value
+// made landing detection consistently miss for a frame (falling an extra
+// ~0.05-0.5 units unnoticed) before over-correcting back up -- a visible
+// hop, repeated every frame while walking. A tiny epsilon (matching
+// player.js's own COLLISION_EPS) fixes both the horizontal and vertical
+// checks at once.
+const MOB_COLLISION_EPS = 0.001;
+
 const mobs = [];
 let sceneRef = null;
 
@@ -80,15 +92,15 @@ function pickWanderTarget(mob) {
 // AABB collision check against real solid blocks, so mobs stop at walls
 // instead of walking straight through them. `feetY` is the mob's own feet
 // height (mob.group.position.y is already feet-level -- see spawnMob).
-// Also doubles as the vertical collision check (see updateMobs' gravity
-// step below), since it already takes an arbitrary feetY to test.
+// Also doubles as the vertical (landing) collision check in updateMobs,
+// since it already takes an arbitrary feetY to test.
 function mobCollides(x, feetY, z) {
   const minX = Math.floor(x - MOB_HALF_WIDTH + 0.5);
   const maxX = Math.floor(x + MOB_HALF_WIDTH + 0.5);
   const minZ = Math.floor(z - MOB_HALF_WIDTH + 0.5);
   const maxZ = Math.floor(z + MOB_HALF_WIDTH + 0.5);
-  const minY = Math.floor(feetY + 0.05 + 0.5);
-  const maxY = Math.floor(feetY + MOB_BODY_HEIGHT - 0.05 + 0.5);
+  const minY = Math.floor(feetY + MOB_COLLISION_EPS + 0.5);
+  const maxY = Math.floor(feetY + MOB_BODY_HEIGHT - MOB_COLLISION_EPS + 0.5);
   for (let by = minY; by <= maxY; by++) {
     for (let bx = minX; bx <= maxX; bx++) {
       for (let bz = minZ; bz <= maxZ; bz++) {
@@ -160,21 +172,17 @@ export function updateMobs(dt, playerPos, damagePlayer) {
       }
     }
 
-    // Real gravity + vertical collision, instead of snapping to
-    // surfaceHeightAt every frame. The old approach read the ground height
-    // of a single column under the mob's rounded position -- whenever that
-    // column happened to land on a tree trunk (or the leaf canopy above
-    // it), the mob would "climb" straight up onto it and back down a
-    // moment later as it walked past. Falling/landing via actual per-axis
-    // collision (same approach as the player in player.js) means a mob can
-    // only ever change height by physically walking up something it
-    // collides with -- a tree trunk blocks it like a wall instead of
-    // teleporting it upward.
+    // Real gravity + vertical collision, same approach as player.js. A
+    // solid block's top surface sits at world y = (block index) + 0.5 --
+    // that's the correct resting feet height. (An earlier version of this
+    // snapped to (block index) + 1, half a block too high; the mob would
+    // then immediately fall again through empty space and re-snap,
+    // producing a continuous hop.)
     mob.vel.y += GRAVITY * dt;
     const newY = pos.y + mob.vel.y * dt;
     if (mob.vel.y <= 0) {
       if (mobCollides(pos.x, newY, pos.z)) {
-        pos.y = Math.floor(newY + 0.5) + 1;
+        pos.y = Math.floor(newY + 0.5) + 0.5;
         mob.vel.y = 0;
         mob.grounded = true;
       } else {
