@@ -70,6 +70,60 @@
     z-index: 25; text-align: center;
   }
   #blockPicker h1 { margin: 0 0 14px; font-size: 26px; }
+  .craft-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.65); color: #fff;
+  display: none; align-items: center; justify-content: center; flex-direction: column;
+  z-index: 25; text-align: center;
+}
+.craft-overlay h1 { margin: 0 0 14px; font-size: 26px; }
+.craft-area { display: flex; align-items: center; gap: 18px; margin-bottom: 20px; }
+.craft-grid { display: grid; gap: 8px; }
+.craft-cell {
+  width: 56px; height: 56px; background: rgba(255,255,255,0.12);
+  border: 2px solid rgba(255,255,255,0.35); border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.craft-cell:hover { background: rgba(255,255,255,0.24); }
+.craft-cell .swatch {
+  width: 38px; height: 38px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.4);
+  background-size: cover; image-rendering: pixelated; image-rendering: crisp-edges;
+}
+.craft-arrow { font-size: 28px; opacity: 0.7; }
+.craft-output {
+  width: 64px; height: 64px; background: rgba(255,255,255,0.08);
+  border: 2px solid rgba(255,224,138,0.5); border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  position: relative; flex-shrink: 0;
+}
+.craft-output.has-result { border-color: #ffe08a; background: rgba(255,224,138,0.18); }
+.craft-output .swatch {
+  width: 44px; height: 44px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.4);
+  background-size: cover; image-rendering: pixelated; image-rendering: crisp-edges;
+}
+.craft-output .out-count {
+  position: absolute; bottom: 2px; right: 4px; font-size: 12px; font-weight: bold;
+  color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000;
+}
+.craft-palette {
+  display: grid; grid-template-columns: repeat(6, 52px); gap: 8px; max-width: 480px;
+}
+.palette-cell {
+  width: 52px; height: 52px; background: rgba(255,255,255,0.1);
+  border: 2px solid rgba(255,255,255,0.3); border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  position: relative; transition: background 0.12s, border-color 0.12s;
+}
+.palette-cell:hover { background: rgba(255,255,255,0.22); }
+.palette-cell.armed { border-color: #ffe08a; box-shadow: 0 0 8px rgba(255,224,138,0.7); }
+.palette-cell .swatch {
+  width: 34px; height: 34px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.4);
+  background-size: cover; image-rendering: pixelated; image-rendering: crisp-edges;
+}
+.palette-cell .count {
+  position: absolute; bottom: 1px; right: 3px; font-size: 10px; font-weight: bold;
+  color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000;
+}
   #pickerGrid {
     display: grid; grid-template-columns: repeat(5, 64px); gap: 10px;
   }
@@ -153,6 +207,27 @@
   <h1>Select Block</h1>
   <div id="pickerGrid"></div>
   <p class="hint">Click a block to assign it to the selected slot &middot; B or Esc to close</p>
+</div>
+<div id="craftingOverlay" class="craft-overlay">
+  <h1>Crafting</h1>
+  <div class="craft-area">
+    <div class="craft-grid" id="craftGridPersonal"></div>
+    <div class="craft-arrow">&rarr;</div>
+    <div class="craft-output" id="craftOutputPersonal"></div>
+  </div>
+  <div class="craft-palette" id="craftPalettePersonal"></div>
+  <p class="hint">Click a material, then click a grid cell to place it &middot; click a filled cell to take it back &middot; click the output to craft &middot; E or Esc to close</p>
+</div>
+
+<div id="craftingTableOverlay" class="craft-overlay">
+  <h1>Crafting Table</h1>
+  <div class="craft-area">
+    <div class="craft-grid" id="craftGridTable"></div>
+    <div class="craft-arrow">&rarr;</div>
+    <div class="craft-output" id="craftOutputTable"></div>
+  </div>
+  <div class="craft-palette" id="craftPaletteTable"></div>
+  <p class="hint">Click a material, then click a grid cell to place it &middot; click a filled cell to take it back &middot; click the output to craft &middot; Esc to close</p>
 </div>
 <div id="overlay">
   <div id="menuButtons">

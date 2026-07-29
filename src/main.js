@@ -1,6 +1,6 @@
 import { HOTBAR } from './blocks.js';
 import { GAME_KEYS, RENDER_DISTANCE, REACH, MOB_SPAWN_INTERVAL, MINE_DURATION } from './config.js';
-import { generateWorld, regenerateTerrain, ensureChunksAround } from './world.js';
+import { generateWorld, regenerateTerrain, ensureChunksAround, getBlock } from './world.js';
 import { flushDirty, meshGroup, updateRenderCenter, rebuildAllChunks } from './meshBuilder.js';
 import {
   player, keys, placePlayerStart, initMouseLook, updatePlayer,
@@ -19,6 +19,7 @@ import { WEAPON_TYPES, isWeapon } from './weapons.js';
 import { initMobs, updateMobs, trySpawnPass, damageMobsRaycast, clearMobs } from './mobs.js';
 import { initHeldItem, updateHeldItem, triggerSwing, resetHeldLightTracking } from './heldItem.js';
 import { initLightSources, clearWorldLights, updateLightFlicker } from './lightSources.js';
+import { initCrafting, toggleCraftMenu, openTableCraft, isCraftingOpen, closeCraftingIfOpen } from './crafting.js';
 
 // ---------- Renderer / Scene ----------
 const canvas = document.getElementById('c');
@@ -66,6 +67,7 @@ updateRenderCenter(player.pos.x, player.pos.z);
 // ---------- UI init ----------
 initHotbar();
 initBlockPicker(canvas);
+initCrafting();
 initMenu(canvas, {
   onRegenerate: regenerateWorld,
   onToggleCreative: () => applyCreative(!isCreative())
@@ -113,11 +115,26 @@ document.addEventListener('keydown', (e) => {
   const num = parseInt(e.key);
   if (num >= 1 && num <= 9) selectSlot(num - 1);
   if (e.code === 'KeyC') applyCreative(!isCreative());
-  if (e.code === 'KeyB') {
-    if (isPickerOpen()) closePicker(canvas);
-    else if (document.pointerLockElement === canvas) openPicker(canvas);
+  if (e.code === 'KeyB' && !e.repeat) {
+    if (isCraftingOpen()) {
+      // crafting UI takes priority -- ignore B while it's open
+    } else if (isPickerOpen()) {
+      closePicker(canvas);
+    } else if (document.pointerLockElement === canvas) {
+      openPicker(canvas);
+    }
   }
-  if (e.code === 'Escape' && isPickerOpen()) closePicker(canvas);
+  if (e.code === 'KeyE' && !e.repeat) {
+    if (isPickerOpen()) {
+      // block picker takes priority -- ignore E while it's open
+    } else {
+      toggleCraftMenu(canvas);
+    }
+  }
+  if (e.code === 'Escape') {
+    if (isPickerOpen()) closePicker(canvas);
+    if (isCraftingOpen()) closeCraftingIfOpen(canvas);
+  }
 });
 document.addEventListener('keyup', (e) => keys[e.code] = false);
 
@@ -144,7 +161,17 @@ canvas.addEventListener('mousedown', (e) => {
       mining.targetKey = null; // resolved against the real target next animate tick
     }
   }
-  if (e.button === 2) tryPlace();
+  if (e.button === 2) {
+    // Right-clicking a placed crafting table opens its 3x3 UI instead of
+    // trying to place whatever's in hand -- matches Minecraft's "right
+    // click interacts with the block you're looking at" behavior.
+    const target = getTargetBlock();
+    if (target && getBlock(target[0], target[1], target[2]) === 'craftingTable') {
+      openTableCraft(canvas);
+    } else {
+      tryPlace();
+    }
+  }
 });
 canvas.addEventListener('mouseup', (e) => {
   if (e.button === 0) {

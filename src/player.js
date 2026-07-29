@@ -2,7 +2,8 @@ import {
   GRAVITY, JUMP_SPEED, MOVE_SPEED, PLAYER_RADIUS, EYE_HEIGHT, PLAYER_HEIGHT,
   MOUSE_SENS, MAX_HEIGHT, COLLISION_EPS, MAX_HEALTH, AIR_CONTROL_ACCEL,
   WORLD_BORDER_CHUNKS, CHUNK_SIZE, SWIM_SPEED, SWIM_SPRINT_SPEED, SWIM_RISE_SPEED,
-  WATER_GRAVITY_SCALE, WATER_SINK_TERMINAL, DOUBLE_TAP_WINDOW, FLY_SPEED, FLY_VERTICAL_SPEED
+  WATER_GRAVITY_SCALE, WATER_SINK_TERMINAL, DOUBLE_TAP_WINDOW, FLY_SPEED, FLY_VERTICAL_SPEED,
+  CROUCH_SPEED_MULT, CROUCH_EYE_OFFSET
 } from './config.js';
 import { isSolid, getBlock, heightAt } from './world.js';
 import { isCreative } from './inventory.js';
@@ -19,7 +20,8 @@ export const player = {
   health: MAX_HEALTH,
   inWater: false,       // true when the player's body is submerged -- drives swim controls/speed
   swimSprinting: false, // toggled on by double-tapping W while inWater; auto-cancels, see updatePlayer
-  flying: false         // creative-only; toggled by double-tapping Space; disables gravity while true
+  flying: false,        // creative-only; toggled by double-tapping Space; disables gravity while true
+  crouching: false      // true while Shift is held and NOT flying -- slows movement, lowers the camera, and (grounded) prevents walking off edges
 };
 
 // raw movement key state, written by main.js's keydown/keyup listeners
@@ -74,6 +76,7 @@ export function placePlayerStart() {
   player.inWater = false;
   player.swimSprinting = false;
   player.flying = false;
+  player.crouching = false;
 }
 
 export function initMouseLook(canvas) {
@@ -116,6 +119,25 @@ function collidesAt(x, feetY, z) {
   return false;
 }
 
+// Ground-support check used for sneak edge-protection. Unlike collidesAt
+// (which tests the whole body column), this only tests the single block
+// layer directly beneath a properly-grounded feet position -- a grounded
+// feetY always lands exactly on blockIndex + 0.5 (see the landing snap
+// below), so Math.floor(feetY) recovers that supporting block's index.
+function hasSupportAt(x, feetY, z) {
+  const minX = Math.floor(x - PLAYER_RADIUS + 0.5);
+  const maxX = Math.floor(x + PLAYER_RADIUS + 0.5);
+  const minZ = Math.floor(z - PLAYER_RADIUS + 0.5);
+  const maxZ = Math.floor(z + PLAYER_RADIUS + 0.5);
+  const by = Math.floor(feetY);
+  for (let bx = minX; bx <= maxX; bx++) {
+    for (let bz = minZ; bz <= maxZ; bz++) {
+      if (isBlocking(bx, by, bz)) return true;
+    }
+  }
+  return false;
+}
+
 // True once the player's body is actually sitting in water -- checks feet
 // and chest height so wading in triggers swim state right away, rather than
 // only once fully submerged.
@@ -135,6 +157,11 @@ export function updatePlayer(dt, camera, onLand) {
   // swim-sprint auto-cancels the instant W is released or the player
   // leaves the water -- same trigger conditions as Minecraft's sprint-swim
   if (!keys['KeyW'] || !player.inWater) player.swimSprinting = false;
+
+  // Sneak is just "Shift held, and not currently using Shift for flight
+  // descent" -- flying's own branch below reads the raw keys directly, so
+  // there's no conflict between the two uses of the same key.
+  player.crouching = !player.flying && (keys['ShiftLeft'] || keys['ShiftRight']);
 
   const forward = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw));
   const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
@@ -174,13 +201,16 @@ export function updatePlayer(dt, camera, onLand) {
     player.grounded = false;
   } else if (player.grounded) {
     // Grounded movement sets horizontal velocity directly (snappy, classic
-    // block-game walk control). Airborne movement instead STEERS the
-    // existing horizontal velocity by a limited amount per frame, and never
-    // zeroes it out just because keys were released -- that's what makes a
-    // running jump carry its momentum through the air instead of stopping
-    // dead the instant you let go of WASD mid-jump.
-    player.vel.x = moveX * MOVE_SPEED;
-    player.vel.z = moveZ * MOVE_SPEED;
+    // block-game walk control). Sneaking scales this down to a slow,
+    // deliberate creep, same spirit as Minecraft. Airborne movement instead
+    // STEERS the existing horizontal velocity by a limited amount per
+    // frame (see the else branch below), and never zeroes it out just
+    // because keys were released -- that's what makes a running jump carry
+    // its momentum through the air instead of stopping dead the instant
+    // you let go of WASD mid-jump.
+    const speed = player.crouching ? MOVE_SPEED * CROUCH_SPEED_MULT : MOVE_SPEED;
+    player.vel.x = moveX * speed;
+    player.vel.z = moveZ * speed;
   } else {
     if (len > 0) {
       player.vel.x += moveX * AIR_CONTROL_ACCEL * dt;
@@ -200,10 +230,26 @@ export function updatePlayer(dt, camera, onLand) {
   // move on X / Z independently (feet = eye position minus eye height).
   // collidesAt tests the whole body, so one check per axis suffices.
   const feetY = player.pos.y - EYE_HEIGHT;
-  if (!collidesAt(player.pos.x + dx, feetY, player.pos.z)) player.pos.x += dx;
-  else player.vel.x = 0; // hit a wall -- kill momentum on that axis instead of clipping through
-  if (!collidesAt(player.pos.x, feetY, player.pos.z + dz)) player.pos.z += dz;
-  else player.vel.z = 0;
+
+  // Sneaking mirrors Minecraft's edge protection: while grounded and
+  // crouching, a step that would walk the player off a ledge (no block
+  // supporting the new feet position) is cancelled on that axis, same as
+  // an ordinary wall collision -- lets you shuffle right up to an edge
+  // without falling off.
+  const edgeProtect = player.grounded && player.crouching && !player.flying;
+
+  const nextX = player.pos.x + dx;
+  if (!collidesAt(nextX, feetY, player.pos.z) && !(edgeProtect && !hasSupportAt(nextX, feetY, player.pos.z))) {
+    player.pos.x = nextX;
+  } else {
+    player.vel.x = 0; // hit a wall (or a sneak-protected edge) -- kill momentum on that axis
+  }
+  const nextZ = player.pos.z + dz;
+  if (!collidesAt(player.pos.x, feetY, nextZ) && !(edgeProtect && !hasSupportAt(player.pos.x, feetY, nextZ))) {
+    player.pos.z = nextZ;
+  } else {
+    player.vel.z = 0;
+  }
 
   if (player.flying) {
     // Simple direct vertical move + collision -- no landing/fall-damage
@@ -262,6 +308,10 @@ export function updatePlayer(dt, camera, onLand) {
   player.pos.z = Math.max(-WORLD_LIMIT, Math.min(WORLD_LIMIT, player.pos.z));
 
   camera.position.copy(player.pos);
+  // Cosmetic sneak crouch: lowers the camera a bit without touching the
+  // actual collision box (feetY/EYE_HEIGHT are unchanged), same trick used
+  // by most block-game clones -- cheap and doesn't risk breaking collision.
+  if (player.crouching) camera.position.y -= CROUCH_EYE_OFFSET;
   camera.rotation.y = player.yaw;
   camera.rotation.x = player.pitch;
 }

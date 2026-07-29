@@ -1,4 +1,5 @@
 import { isPickerOpen } from './blockPicker.js';
+import { isCraftingOpen } from './crafting.js';
 
 const overlay = document.getElementById('overlay');
 const menuButtons = document.getElementById('menuButtons');
@@ -33,7 +34,7 @@ export function initMenu(canvas, { onRegenerate, onToggleCreative }) {
   btnCreativeEl.addEventListener('click', () => onToggleCreative());
 
   document.addEventListener('pointerlockchange', () => {
-    if (isPickerOpen()) return; // picker manages its own overlay; don't pop pause menu
+    if (isPickerOpen() || isCraftingOpen()) return; // those manage their own overlays; don't pop pause menu
     const locked = document.pointerLockElement === canvas;
     overlay.style.display = locked ? 'none' : 'flex';
     if (!locked) {

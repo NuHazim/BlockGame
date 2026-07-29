@@ -55,7 +55,9 @@ export const DOUBLE_TAP_WINDOW = 300;  // ms window for double-tap gestures (swi
 // ---------- Flight (Creative only) ----------
 export const FLY_SPEED = 9;            // horizontal speed while flying
 export const FLY_VERTICAL_SPEED = 7;   // ascend/descend speed while flying (Space / Shift)
-
+// ---------- Crouch / sneak ----------
+export const CROUCH_SPEED_MULT = 0.3;  // fraction of normal MOVE_SPEED while sneaking
+export const CROUCH_EYE_OFFSET = 0.3;  // how far the camera visually lowers while sneaking (cosmetic only -- collision box is unchanged)
 // ---------- Day / night cycle ----------
 // how long one full sunrise-to-sunrise loop takes, in real seconds.
 // the sun/moon path itself (rise in +x, overhead at noon, set in -x) is

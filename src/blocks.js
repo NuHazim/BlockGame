@@ -9,7 +9,11 @@ export const BLOCK_TYPES = {
   sand:  { label: 'Sand',  color: 0xe0d29a, faces: { all: 'sand' } },
   snow:  { label: 'Snow',  color: 0xf5f9ff, faces: { top: 'snow', side: 'snowSide', bottom: 'stone' } },
   water: { label: 'Water', color: 0x3a6fd8, faces: { all: 'water' } },
-  torch: { label: 'Torch', color: 0xffaa33, faces: { all: 'torch' } }
+  torch: { label: 'Torch', color: 0xffaa33, faces: { all: 'torch' } },
+  craftingTable: {
+    label: 'Crafting Table', color: 0xa9752f,
+    faces: { top: 'craftingTableTop', side: 'craftingTableSide', bottom: 'woodTop' }
+  }
 };
 
 // Block types that occupy a cell (solid for placement/collision/targeting)
@@ -54,7 +58,28 @@ function paintGrassSide(ctx, x0, y0, size) {
     }
   }
 }
+function paintCraftingTableTop(ctx, x0, y0, size) {
+  paintSpeckle(ctx, x0, y0, size, BLOCK_TYPES.craftingTable.color, 12);
+  // 3x3 grid lines evoking the crafting squares, so it reads as a
+  // workbench and not just another plank block
+  const step = size / 3;
+  ctx.strokeStyle = 'rgba(50,28,8,0.55)';
+  ctx.lineWidth = Math.max(1, size * 0.045);
+  for (let i = 1; i < 3; i++) {
+    ctx.beginPath();
+    ctx.moveTo(x0 + i * step, y0);
+    ctx.lineTo(x0 + i * step, y0 + size);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x0, y0 + i * step);
+    ctx.lineTo(x0 + size, y0 + i * step);
+    ctx.stroke();
+  }
+}
 
+function paintCraftingTableSide(ctx, x0, y0, size) {
+  paintWoodBark(ctx, x0, y0, size);
+}
 function paintWoodRings(ctx, x0, y0, size) {
   const cx = size / 2, cy = size / 2;
   for (let x = 0; x < size; x++) {
@@ -113,7 +138,6 @@ function paintTorch(ctx, x0, y0, size) {
     }
   }
 }
-
 export const TILE_PAINTERS = {
   grassTop:  (ctx, x, y, s) => paintSpeckle(ctx, x, y, s, BLOCK_TYPES.grass.color, 16),
   grassSide: (ctx, x, y, s) => paintGrassSide(ctx, x, y, s),
@@ -127,6 +151,8 @@ export const TILE_PAINTERS = {
   snowSide:  (ctx, x, y, s) => paintSnowSide(ctx, x, y, s),
   water:     (ctx, x, y, s) => paintSpeckle(ctx, x, y, s, BLOCK_TYPES.water.color, 12),
   torch:     (ctx, x, y, s) => paintTorch(ctx, x, y, s),
+  craftingTableTop:  (ctx, x, y, s) => paintCraftingTableTop(ctx, x, y, s),
+  craftingTableSide: (ctx, x, y, s) => paintCraftingTableSide(ctx, x, y, s),
   obsidian: (ctx, x0, y0, size) => {
     const PIXELS = Array.from({ length: 16 }, () => Array(16).fill('#2b2b2b'));
     const scale = size / 16;
