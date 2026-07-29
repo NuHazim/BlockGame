@@ -1,10 +1,8 @@
-import { BLOCK, RENDER_DISTANCE } from './config.js';
+import { RENDER_DISTANCE } from './config.js';
 import { materials, tileTexture } from './atlas.js';
 import { BLOCK_TYPES, NON_OCCLUDING_BLOCKS } from './blocks.js';
-import { blocks, getBlock, isSolid, chunkOf, getChunkBlocks } from './world.js';
+import { getBlock, isSolid, chunkOf, getChunkBlocks, isChunkGenerated } from './world.js';
 import { getBlockLight } from './lighting.js';
-
-export const geometry = new THREE.BoxGeometry(BLOCK, BLOCK, BLOCK);
 
 const FACE_BRIGHTNESS = [0.86, 0.72, 1.00, 0.55, 0.80, 0.66];
 
@@ -20,6 +18,8 @@ function bakeFaceShading(geo, mult = 1) {
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 }
+
+export const geometry = new THREE.BoxGeometry(1, 1, 1);
 bakeFaceShading(geometry);
 
 export const torchGeometry = new THREE.BoxGeometry(0.18, 0.7, 0.18);
@@ -27,22 +27,13 @@ torchGeometry.translate(0, -0.15, 0);
 bakeFaceShading(torchGeometry);
 
 // ---------- Water surface geometry ----------
-// Water no longer renders as a full cube per cell -- a solid-sided box made
-// the shoreline/side view look like a chunky blue wall, which read as
-// "ugly" even after fixing the transparency/culling issues. Instead, only
-// the topmost water cell in each column (the one actually exposed to air
-// above it) gets a thin flat plane sitting at the top of that cell. Every
-// other water cell (the water beneath the surface, still tracked normally
-// for swimming physics in player.js) renders nothing at all. This trades
-// away seeing blue on the sides of underwater walls/caves for a much
-// cleaner, non-boxy surface -- closer to a simple pond/ocean top layer.
+// Water renders as a thin flat slab at the top of a column, not a full
+// cube -- see the note further down where it's used.
 const WATER_SURFACE_THICKNESS = 0.12;
 let waterSurfaceGeometry = null;
 function getWaterSurfaceGeometry() {
   if (waterSurfaceGeometry) return waterSurfaceGeometry;
   const geo = new THREE.BoxGeometry(1, WATER_SURFACE_THICKNESS, 1);
-  // cell spans -0.5..+0.5 in Y -- shift the thin slab up to the very top of
-  // that span so it reads as a surface layer, not a slab floating mid-block
   geo.translate(0, 0.5 - WATER_SURFACE_THICKNESS / 2, 0);
   bakeFaceShading(geo, 1);
   waterSurfaceGeometry = geo;
@@ -58,13 +49,9 @@ function getWaterSurfaceLitGeometry() {
 }
 
 // Single lit tier: any block touched by torchlight (level > 0) renders at
-// one fixed brightness via the unlit bucket. Toned down from 1.05 to 0.85
-// so it reads as "lit" without blowing out to near-white.
+// one fixed brightness via the unlit bucket.
 const LIT_BRIGHTNESS_MULT = 0.85;
-
-function isLit(level) {
-  return level > 0;
-}
+function isLit(level) { return level > 0; }
 
 let litGeomCache = { block: null, torch: null };
 function getLitGeometry(isTorch) {
@@ -84,20 +71,14 @@ function primaryTileFor(type) {
 const litMatCache = {};
 function getLitMaterial(type) {
   if (litMatCache[type]) return litMatCache[type];
-
   if (type === 'water') {
     const mat = new THREE.MeshBasicMaterial({
-      color: 0x5aa8ff,
-      transparent: true,
-      opacity: 0.66,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      vertexColors: true
+      color: 0x5aa8ff, transparent: true, opacity: 0.66,
+      depthWrite: false, side: THREE.DoubleSide, vertexColors: true
     });
     litMatCache[type] = mat;
     return mat;
   }
-
   const tex = tileTexture(primaryTileFor(type));
   const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, map: tex, vertexColors: true });
   litMatCache[type] = mat;
@@ -105,22 +86,26 @@ function getLitMaterial(type) {
 }
 
 export const meshGroup = new THREE.Group();
-const meshes = {};
 const dummy = new THREE.Object3D();
 
-let dirtyTypes = new Set();
+// ---------- Per-chunk mesh cache ----------
+// This is the actual performance fix for "increasing render distance
+// causes lag." The old approach rebuilt ONE giant InstancedMesh per block
+// type covering every chunk in the whole render radius, and did that full
+// rebuild on every single chunk crossing -- cost scaled with
+// RENDER_DISTANCE^2, so raising render distance made every step across a
+// chunk boundary much more expensive.
+//
+// Instead, each chunk gets its own small set of InstancedMeshes, built
+// once and cached here (chunkKey -> { bucketKey: InstancedMesh }).
+// Crossing into a new chunk now only builds the newly-exposed chunks at
+// the edge of the render radius (a thin ring, cost scales with
+// RENDER_DISTANCE, not its square) and evicts whichever chunks just fell
+// out of range -- chunks that were already loaded and are still in view
+// aren't touched at all.
+const chunkMeshes = new Map();
 let centerChunk = null;
 
-export function updateRenderCenter(x, z) {
-  const [cx, cz] = chunkOf(x, z);
-  if (!centerChunk || centerChunk[0] !== cx || centerChunk[1] !== cz) {
-    centerChunk = [cx, cz];
-    for (const t in materials) dirtyTypes.add(t);
-  }
-}
-
-// Water is excluded here too -- it's never part of the normal cube-culling
-// pipeline anymore, handled separately below via the surface-only pass.
 function isOccluding(t) {
   return t != null && t !== 'torch' && t !== 'water';
 }
@@ -131,117 +116,195 @@ function neighborsAllOccluding(x, y, z) {
          isOccluding(getBlock(x, y, z + 1)) && isOccluding(getBlock(x, y, z - 1));
 }
 
-export function rebuildTypes(typesInput) {
-  // flushDirty() passes a Set here, but Set has no .filter()/.includes() --
-  // that mismatch threw on the very first frame that marked anything dirty
-  // (i.e. almost immediately), which killed the render loop before a
-  // single frame ever drew -- this is what caused the pitch-black screen.
-  const types = Array.isArray(typesInput) ? typesInput : Array.from(typesInput);
-  const nonWaterTypes = types.filter((t) => t !== 'water');
-  const includeWater = types.includes('water');
+function parseKey(k) {
+  const x = +k.slice(0, k.indexOf(','));
+  const rest = k.slice(k.indexOf(',') + 1);
+  const y = +rest.slice(0, rest.indexOf(','));
+  const z = +rest.slice(rest.indexOf(',') + 1);
+  return [x, y, z];
+}
 
-  const grouped = {};
-  const groupedLit = {};
-  for (const t of nonWaterTypes) { grouped[t] = []; groupedLit[t] = []; }
+// Builds every InstancedMesh needed for one chunk and stores them under
+// chunkMeshes.get(chunkKey). Occlusion/lighting checks still read from the
+// global block/light data (via getBlock/isSolid/getBlockLight), so a
+// chunk's meshing correctly accounts for its neighbors in adjacent chunks
+// even though only this one chunk's blocks are being iterated.
+//
+// Returns false (and builds nothing) if this chunk's terrain data hasn't
+// been generated yet -- the caller is responsible for retrying later
+// instead of treating "no data yet" as "permanently empty". Getting this
+// wrong was the bug where chunks at higher render distances would never
+// load until an edit forced a rebuild: the old version cached an empty
+// mesh set the instant it saw no data, and then never looked again even
+// after the chunk's terrain actually finished generating a few frames
+// later.
+function buildChunkMeshes(cx, cz) {
+  if (!isChunkGenerated(cx, cz)) return false;
 
-  function consider(k, type) {
-    if (!(type in grouped)) return;
-    const x = +k.slice(0, k.indexOf(','));
-    const rest = k.slice(k.indexOf(',') + 1);
-    const y = +rest.slice(0, rest.indexOf(','));
-    const z = +rest.slice(rest.indexOf(',') + 1);
+  const key = cx + ',' + cz;
+  const cm = getChunkBlocks(cx, cz);
+  const bucketMeshes = {};
 
-    if (!NON_OCCLUDING_BLOCKS.has(type) && neighborsAllOccluding(x, y, z)) return;
+  if (cm) {
+    const grouped = {};
+    const groupedLit = {};
+    for (const t in materials) {
+      if (t === 'water') continue;
+      grouped[t] = [];
+      groupedLit[t] = [];
+    }
+    const waterSurface = [];
+    const waterSurfaceLit = [];
 
-    const level = getBlockLight(x, y, z);
-    if (isLit(level)) groupedLit[type].push([x, y, z]);
-    else grouped[type].push([x, y, z]);
-  }
+    for (const [k, type] of cm) {
+      const [x, y, z] = parseKey(k);
 
-  const waterSurface = [];
-  const waterSurfaceLit = [];
-
-  function considerWater(k, type) {
-    if (type !== 'water') return;
-    const x = +k.slice(0, k.indexOf(','));
-    const rest = k.slice(k.indexOf(',') + 1);
-    const y = +rest.slice(0, rest.indexOf(','));
-    const z = +rest.slice(rest.indexOf(',') + 1);
-
-    if (isSolid(x, y + 1, z)) return; // covered from above (more water, or a solid block) -- nothing to see
-
-    const level = getBlockLight(x, y, z);
-    if (isLit(level)) waterSurfaceLit.push([x, y, z]);
-    else waterSurface.push([x, y, z]);
-  }
-
-  if (centerChunk) {
-    const [ccx, ccz] = centerChunk;
-    for (let dcx = -RENDER_DISTANCE; dcx <= RENDER_DISTANCE; dcx++) {
-      for (let dcz = -RENDER_DISTANCE; dcz <= RENDER_DISTANCE; dcz++) {
-        const cm = getChunkBlocks(ccx + dcx, ccz + dcz);
-        if (!cm) continue;
-        for (const [k, type] of cm) {
-          consider(k, type);
-          if (includeWater) considerWater(k, type);
-        }
+      if (type === 'water') {
+        if (isSolid(x, y + 1, z)) continue; // covered from above -- nothing to see
+        const level = getBlockLight(x, y, z);
+        (isLit(level) ? waterSurfaceLit : waterSurface).push([x, y, z]);
+        continue;
       }
+
+      if (!NON_OCCLUDING_BLOCKS.has(type) && neighborsAllOccluding(x, y, z)) continue;
+      const level = getBlockLight(x, y, z);
+      (isLit(level) ? groupedLit[type] : grouped[type]).push([x, y, z]);
     }
+
+    function build(bucketKey, list, geo, mat) {
+      if (!list || list.length === 0) return;
+      const mesh = new THREE.InstancedMesh(geo, mat, list.length);
+      for (let i = 0; i < list.length; i++) {
+        dummy.position.set(list[i][0], list[i][1], list[i][2]);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      meshGroup.add(mesh);
+      bucketMeshes[bucketKey] = mesh;
+    }
+
+    for (const t in grouped) {
+      const isTorch = t === 'torch';
+      const baseGeo = isTorch ? torchGeometry : geometry;
+      build(t, grouped[t], baseGeo, materials[t]);
+      build(t + ':lit', groupedLit[t], getLitGeometry(isTorch), getLitMaterial(t));
+    }
+    build('water', waterSurface, getWaterSurfaceGeometry(), materials.water);
+    build('water:lit', waterSurfaceLit, getWaterSurfaceLitGeometry(), getLitMaterial('water'));
+  }
+
+  chunkMeshes.set(key, bucketMeshes);
+  return true;
+}
+
+// Chunks that were wanted but whose terrain data wasn't generated yet --
+// retried cheaply every frame (see retryPendingChunks) instead of being
+// silently forgotten.
+const pendingChunks = new Set();
+
+function tryBuildChunk(key) {
+  const [cx, cz] = key.split(',').map(Number);
+  if (buildChunkMeshes(cx, cz)) {
+    pendingChunks.delete(key);
   } else {
-    for (const [k, type] of blocks) {
-      consider(k, type);
-      if (includeWater) considerWater(k, type);
+    pendingChunks.add(key);
+  }
+}
+
+function retryPendingChunks() {
+  if (pendingChunks.size === 0) return;
+  for (const key of Array.from(pendingChunks)) tryBuildChunk(key);
+}
+
+function removeChunkMeshes(key) {
+  const bucketMeshes = chunkMeshes.get(key);
+  if (!bucketMeshes) return;
+  for (const bucketKey in bucketMeshes) meshGroup.remove(bucketMeshes[bucketKey]);
+  chunkMeshes.delete(key);
+}
+
+function rebuildChunk(cx, cz) {
+  const key = cx + ',' + cz;
+  removeChunkMeshes(key);
+  tryBuildChunk(key);
+}
+
+// Called every frame from main.js. Retries any chunks still waiting on
+// terrain generation first (cheap no-op once the pending list is empty),
+// then -- only when the player has actually crossed into a new chunk --
+// builds whatever's newly entering the render radius and evicts whatever
+// just left it. Chunks already loaded and still in view aren't touched.
+export function updateRenderCenter(x, z) {
+  retryPendingChunks();
+
+  const [cx, cz] = chunkOf(x, z);
+  if (centerChunk && centerChunk[0] === cx && centerChunk[1] === cz) return;
+  centerChunk = [cx, cz];
+
+  const wanted = new Set();
+  for (let dx = -RENDER_DISTANCE; dx <= RENDER_DISTANCE; dx++) {
+    for (let dz = -RENDER_DISTANCE; dz <= RENDER_DISTANCE; dz++) {
+      wanted.add((cx + dx) + ',' + (cz + dz));
     }
   }
 
-  function buildBucket(bucketKey, list, geo, mat) {
-    if (meshes[bucketKey]) {
-      meshGroup.remove(meshes[bucketKey]);
-      delete meshes[bucketKey];
-    }
-    if (!list || list.length === 0) return;
-    const mesh = new THREE.InstancedMesh(geo, mat, list.length);
-    for (let i = 0; i < list.length; i++) {
-      dummy.position.set(list[i][0], list[i][1], list[i][2]);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
-    }
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    meshGroup.add(mesh);
-    meshes[bucketKey] = mesh;
+  for (const key of wanted) {
+    if (!chunkMeshes.has(key) && !pendingChunks.has(key)) tryBuildChunk(key);
   }
+  for (const key of Array.from(chunkMeshes.keys())) {
+    if (!wanted.has(key)) removeChunkMeshes(key);
+  }
+  for (const key of Array.from(pendingChunks)) {
+    if (!wanted.has(key)) pendingChunks.delete(key);
+  }
+}
 
-  for (const t of nonWaterTypes) {
-    const isTorch = t === 'torch';
-    const baseGeo = isTorch ? torchGeometry : geometry;
-    buildBucket(t, grouped[t], baseGeo, materials[t]);
-    buildBucket(t + ':lit', groupedLit[t], getLitGeometry(isTorch), getLitMaterial(t));
-  }
+// Forces every currently-visible chunk to be rebuilt from scratch --
+// needed after a full world regenerate, where the block DATA under
+// existing chunk coordinates has completely changed even though the
+// player's chunk position often hasn't (so updateRenderCenter alone
+// wouldn't otherwise detect anything needs rebuilding).
+export function rebuildAllChunks() {
+  for (const key of Array.from(chunkMeshes.keys())) removeChunkMeshes(key);
+  pendingChunks.clear();
+  centerChunk = null;
+}
 
-  if (includeWater) {
-    buildBucket('water', waterSurface, getWaterSurfaceGeometry(), materials.water);
-    buildBucket('water:lit', waterSurfaceLit, getWaterSurfaceLitGeometry(), getLitMaterial('water'));
-  }
+// ---------- Dirty tracking for edits / lighting changes ----------
+const dirtyChunks = new Set();
+
+function markChunkDirty(cx, cz) { dirtyChunks.add(cx + ',' + cz); }
+
+// Called after a block is placed/destroyed. Marks the chunk containing the
+// edit dirty, plus its immediate neighbor chunks -- an edit near a chunk
+// boundary can change occlusion for blocks just across that boundary too,
+// even though this chunk's own data didn't change.
+export function markEditDirty(x, y, z) {
+  markChunkDirty(...chunkOf(x, z));
+  markChunkDirty(...chunkOf(x + 1, z));
+  markChunkDirty(...chunkOf(x - 1, z));
+  markChunkDirty(...chunkOf(x, z + 1));
+  markChunkDirty(...chunkOf(x, z - 1));
+}
+
+// Used when a light source is added/removed/moved -- torchlight can affect
+// the lit/unlit bucket assignment of blocks anywhere within its radius, and
+// tracking that precisely per-chunk isn't worth the complexity for how
+// rarely this actually fires (placing/breaking a torch), so it just marks
+// every currently-loaded chunk dirty. Kept under its original name so
+// heldItem.js/lightSources.js/interaction.js don't need any changes.
+export function markAllTypesDirty() {
+  for (const key of chunkMeshes.keys()) dirtyChunks.add(key);
 }
 
 export function flushDirty() {
-  if (dirtyTypes.size === 0) return;
-  rebuildTypes(dirtyTypes);
-  dirtyTypes.clear();
-}
-
-export function markEditDirty(x, y, z, ownType) {
-  if (ownType) dirtyTypes.add(ownType);
-  const nb = [
-    getBlock(x + 1, y, z), getBlock(x - 1, y, z),
-    getBlock(x, y + 1, z), getBlock(x, y - 1, z),
-    getBlock(x, y, z + 1), getBlock(x, y, z - 1)
-  ];
-  for (const t of nb) if (t) dirtyTypes.add(t);
-}
-
-export function markAllTypesDirty() {
-  for (const t in materials) dirtyTypes.add(t);
+  if (dirtyChunks.size === 0) return;
+  for (const key of dirtyChunks) {
+    const [cx, cz] = key.split(',').map(Number);
+    rebuildChunk(cx, cz);
+  }
+  dirtyChunks.clear();
 }

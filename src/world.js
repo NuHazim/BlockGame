@@ -1,4 +1,4 @@
-import { MAX_HEIGHT, CHUNK_SIZE, WORLD_BORDER_CHUNKS, SEA_LEVEL, SNOW_LEVEL } from './config.js';
+import { MAX_HEIGHT, CHUNK_SIZE, WORLD_BORDER_CHUNKS, SEA_LEVEL, SNOW_LEVEL, RENDER_DISTANCE } from './config.js';
 
 // key "x,y,z" -> type string
 export const blocks = new Map();
@@ -99,6 +99,13 @@ function chunkOrigin(cx, cz) {
 const generatedChunks = new Set();
 const chunkKey = (cx, cz) => cx + ',' + cz;
 
+// meshBuilder needs to tell "this chunk has no data yet, try again later"
+// apart from "this chunk is generated and genuinely has nothing to mesh" --
+// getChunkBlocks() returning undefined can't distinguish those on its own.
+export function isChunkGenerated(cx, cz) {
+  return generatedChunks.has(chunkKey(cx, cz));
+}
+
 function generateChunk(cx, cz) {
   // bounded world -- stop generating past the border instead of growing forever
   if (Math.abs(cx) > WORLD_BORDER_CHUNKS || Math.abs(cz) > WORLD_BORDER_CHUNKS) return;
@@ -149,7 +156,14 @@ export function ensureChunksAround(x, z, radius) {
 }
 
 export function generateWorld() {
-  ensureChunksAround(0, 0, 2);
+  // was hardcoded to a radius of 2 regardless of RENDER_DISTANCE -- fine
+  // back when RENDER_DISTANCE was small, but at higher values the mesh
+  // builder would immediately try to mesh chunks whose terrain hadn't been
+  // generated yet on startup. It has its own retry queue for that now (see
+  // meshBuilder.js), but there's no reason to rely on it for the very first
+  // load -- just generate enough terrain up front to match what's actually
+  // going to be rendered.
+  ensureChunksAround(0, 0, RENDER_DISTANCE + 1);
 }
 
 function placeTree(x, y, z) {

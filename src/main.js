@@ -1,7 +1,7 @@
-import { BLOCK_TYPES, HOTBAR } from './blocks.js';
+import { HOTBAR } from './blocks.js';
 import { GAME_KEYS, RENDER_DISTANCE, REACH, MOB_SPAWN_INTERVAL, MINE_DURATION } from './config.js';
 import { generateWorld, regenerateTerrain, ensureChunksAround } from './world.js';
-import { rebuildTypes, flushDirty, meshGroup, updateRenderCenter } from './meshBuilder.js';
+import { flushDirty, meshGroup, updateRenderCenter, rebuildAllChunks } from './meshBuilder.js';
 import {
   player, keys, placePlayerStart, initMouseLook, updatePlayer,
   notifyKeyWPress, notifySpacePress, cancelFlying
@@ -62,7 +62,6 @@ window.addEventListener('resize', () => {
 generateWorld();
 placePlayerStart();
 updateRenderCenter(player.pos.x, player.pos.z);
-rebuildTypes(Object.keys(BLOCK_TYPES));
 
 // ---------- UI init ----------
 initHotbar();
@@ -89,12 +88,12 @@ function applyCreative(on) {
 function regenerateWorld() {
   regenerateTerrain();
   placePlayerStart();
+  rebuildAllChunks();
   updateRenderCenter(player.pos.x, player.pos.z);
   clearEffects();
   clearMobs();
   clearWorldLights();
   resetHeldLightTracking();
-  rebuildTypes(Object.keys(BLOCK_TYPES));
 }
 
 // ---------- Input ----------
