@@ -8,7 +8,18 @@ export const MAX_HEIGHT = 40
 
 export const SEA_LEVEL = 5;
 export const SNOW_LEVEL = 21;
-export const RENDER_DISTANCE = 5;                     // chunk radius around the player -- 4 = 9x9 chunks rendered
+export const RENDER_DISTANCE = 8;                     // chunk radius around the player -- 8 = 17x17 chunks rendered
+
+// How many chunks (per side) get batched into one shared set of meshes.
+// Each region draws its grass/dirt/stone/etc as ONE mesh per block type
+// covering every chunk inside it, instead of one mesh per type PER CHUNK --
+// that's what actually controls draw-call count at higher render
+// distances. Bigger = fewer draw calls per frame, but a single block edit
+// now has to rebuild its whole region (up to MESH_REGION_SIZE^2 chunks)
+// instead of just the edited chunk, so there's a real tradeoff. 4 is a
+// reasonable middle ground; drop it to 2 if edits start feeling laggy, or
+// raise it if you push RENDER_DISTANCE higher and want fewer draw calls.
+export const MESH_REGION_SIZE = 4;
 
 // The world used to generate infinitely outward forever, which was a big
 // source of the long-session lag. Real Minecraft's world border defaults to
