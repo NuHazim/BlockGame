@@ -8,7 +8,7 @@ export const MAX_HEIGHT = 40
 
 export const SEA_LEVEL = 5;
 export const SNOW_LEVEL = 21;
-export const RENDER_DISTANCE = 2;                     // chunk radius around the player -- 2 = 5x5 chunks rendered
+export const RENDER_DISTANCE = 5;                     // chunk radius around the player -- 4 = 9x9 chunks rendered
 
 // The world used to generate infinitely outward forever, which was a big
 // source of the long-session lag. Real Minecraft's world border defaults to
