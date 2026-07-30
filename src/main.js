@@ -17,7 +17,7 @@ import { initDayNight } from './dayNight.js';
 import { initClouds, updateClouds } from './clouds.js';
 import { WEAPON_TYPES, isWeapon } from './weapons.js';
 import { initMobs, updateMobs, trySpawnPass, damageMobsRaycast, clearMobs } from './mobs.js';
-import { initHeldItem, updateHeldItem, triggerSwing, resetHeldLightTracking } from './heldItem.js';
+import { initHeldItem, updateHeldItem, triggerSwing } from './heldItem.js';
 import { initLightSources, clearWorldLights, updateLightFlicker } from './lightSources.js';
 import { initCrafting, toggleCraftMenu, openTableCraft, isCraftingOpen, closeCraftingIfOpen } from './crafting.js';
 
@@ -67,7 +67,7 @@ updateRenderCenter(player.pos.x, player.pos.z);
 // ---------- UI init ----------
 initHotbar();
 initBlockPicker(canvas);
-initCrafting();
+initCrafting(canvas);
 initMenu(canvas, {
   onRegenerate: regenerateWorld,
   onToggleCreative: () => applyCreative(!isCreative())
@@ -95,7 +95,6 @@ function regenerateWorld() {
   clearEffects();
   clearMobs();
   clearWorldLights();
-  resetHeldLightTracking();
 }
 
 // ---------- Input ----------
@@ -208,7 +207,7 @@ function animate() {
     updateMobs(dt, player.pos, damagePlayer);
     trySpawnPass(player.pos, dt, spawnState);
     const isMoving = keys['KeyW'] || keys['KeyA'] || keys['KeyS'] || keys['KeyD'];
-    updateHeldItem(dt, isMoving, player.pos);
+    updateHeldItem(dt, isMoving);
   }
 
   ensureChunksAround(player.pos.x, player.pos.z, RENDER_DISTANCE + 1);

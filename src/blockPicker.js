@@ -39,9 +39,11 @@ function addCell(iconUrl, type, canvas) {
 }
 
 // Rebuilds the grid each time the picker opens. Survival mode only offers
-// block types currently sitting in the inventory (count > 0) -- so nothing
-// shows up here until it's actually been mined. Weapons are tools rather
-// than consumables, so they're always offered regardless of mode.
+// block types AND weapons/tools currently sitting in the inventory
+// (count > 0) -- with 18 crafted weapon/tool variants now existing,
+// letting them all be picked for free regardless of whether you've
+// actually crafted one would make the whole crafting tier system
+// pointless, so weapons are gated the same way blocks already were.
 function renderPickerGrid(canvas) {
   pickerGridEl.innerHTML = '';
   Object.keys(BLOCK_TYPES).forEach((type) => {
@@ -49,6 +51,7 @@ function renderPickerGrid(canvas) {
     addCell(blockIconURL(type), type, canvas);
   });
   Object.keys(WEAPON_TYPES).forEach((type) => {
+    if (!isCreative() && (inventory[type] || 0) <= 0) return;
     addCell(weaponIconURL(type), type, canvas);
   });
   if (pickerGridEl.children.length === 0) {

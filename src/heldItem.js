@@ -3,8 +3,6 @@ import { materials } from './atlas.js';
 import { WEAPON_TYPES, isWeapon } from './weapons.js';
 import { getSelectedIndex } from './hotbar.js';
 import { isLightEmitter, LIGHT_EMITTERS } from './lightSources.js';
-import { addLightSource, removeLightSource } from './lighting.js';
-import { markAllTypesDirty } from './meshBuilder.js';
 
 let handGroup = null;
 let currentType = null;
@@ -12,18 +10,6 @@ let currentMesh = null;
 let flameSprite = null;
 let swingTimer = 0;
 let bobTimer = 0;
-let heldSourceKey = null; // "x,y,z" cell currently registered as a light source for a held torch
-
-// Repositioning the held-item's light source triggers a full lighting BFS
-// recompute (lighting.js) + a full remesh of every block type in render
-// distance (meshBuilder.js's markAllTypesDirty). Doing that every single
-// time the player crosses a block boundary while holding a torch is what
-// caused the walking-with-a-torch stutter. Throttling to a few times a
-// second is imperceptible positionally but eliminates the per-frame-ish
-// remesh storm. Still updates immediately when the held item itself changes,
-// so switching to/from a torch reacts instantly.
-let heldLightUpdateTimer = 0;
-const HELD_LIGHT_UPDATE_INTERVAL = 0.2; // seconds between held-light repositions
 
 const REST_POS = new THREE.Vector3(0.55, -0.45, -0.85);
 const REST_ROT = new THREE.Euler(0.2, 0.5, -0.1);
@@ -103,6 +89,11 @@ function rebuildMesh(type) {
   currentMesh = isWeapon(type) ? buildWeaponMesh(type) : buildBlockMesh(type);
   handGroup.add(currentMesh);
 
+  // Purely cosmetic -- a held torch still shows its little flame on your
+  // hand, but (unlike a PLACED torch) it does NOT register as a real light
+  // source in lighting.js, so it won't brighten anything around you until
+  // you actually place it. See interaction.js's tryPlace/tryDestroy for
+  // where placed torches register/unregister their light.
   if (isLightEmitter(type)) {
     flameSprite = makeHeldFlameSprite(LIGHT_EMITTERS[type]);
     flameSprite.position.set(0, 0.3, 0.1);
@@ -110,62 +101,12 @@ function rebuildMesh(type) {
   }
 }
 
-// Registers/moves a real light source (lighting.js) at the player's current
-// block cell while a light-emitting item is held, so nearby blocks actually
-// brighten -- like holding a torch in Minecraft. Only re-registers when the
-// player has moved to a new integer cell AND the throttle timer (see
-// updateHeldItem) allows it, keeping this cheap.
-function updateHeldLightTracking(type, playerPos) {
-  if (!isLightEmitter(type)) {
-    if (heldSourceKey) {
-      const [x, y, z] = heldSourceKey.split(',').map(Number);
-      removeLightSource(x, y, z);
-      markAllTypesDirty();
-      heldSourceKey = null;
-    }
-    return;
-  }
-
-  const x = Math.round(playerPos.x), y = Math.round(playerPos.y), z = Math.round(playerPos.z);
-  const k = x + ',' + y + ',' + z;
-  if (k === heldSourceKey) return;
-
-  if (heldSourceKey) {
-    const [ox, oy, oz] = heldSourceKey.split(',').map(Number);
-    removeLightSource(ox, oy, oz);
-  }
-  addLightSource(x, y, z, LIGHT_EMITTERS[type].level);
-  markAllTypesDirty();
-  heldSourceKey = k;
-}
-
-// call on world regenerate so a stale registration doesn't linger against
-// the freshly-cleared lighting state
-export function resetHeldLightTracking() {
-  if (heldSourceKey) {
-    const [x, y, z] = heldSourceKey.split(',').map(Number);
-    removeLightSource(x, y, z);
-    heldSourceKey = null;
-  }
-  heldLightUpdateTimer = 0;
-}
-
 export function triggerSwing() { swingTimer = 0.22; }
 
-export function updateHeldItem(dt, isMoving, playerPos) {
+export function updateHeldItem(dt, isMoving) {
   if (!handGroup) return;
   const type = HOTBAR[getSelectedIndex()];
-  const itemChanged = type !== currentType;
-  if (itemChanged) rebuildMesh(type);
-
-  // Throttled: see comment above heldLightUpdateTimer's declaration.
-  // Still fires immediately on an item swap so the glow doesn't lag behind
-  // equipping/unequipping a torch.
-  heldLightUpdateTimer -= dt;
-  if (itemChanged || heldLightUpdateTimer <= 0) {
-    heldLightUpdateTimer = HELD_LIGHT_UPDATE_INTERVAL;
-    updateHeldLightTracking(type, playerPos);
-  }
+  if (type !== currentType) rebuildMesh(type);
   if (!currentMesh) return;
 
   bobTimer += dt * (isMoving ? 10 : 2.2);

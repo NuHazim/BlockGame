@@ -70,60 +70,6 @@
     z-index: 25; text-align: center;
   }
   #blockPicker h1 { margin: 0 0 14px; font-size: 26px; }
-  .craft-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.65); color: #fff;
-  display: none; align-items: center; justify-content: center; flex-direction: column;
-  z-index: 25; text-align: center;
-}
-.craft-overlay h1 { margin: 0 0 14px; font-size: 26px; }
-.craft-area { display: flex; align-items: center; gap: 18px; margin-bottom: 20px; }
-.craft-grid { display: grid; gap: 8px; }
-.craft-cell {
-  width: 56px; height: 56px; background: rgba(255,255,255,0.12);
-  border: 2px solid rgba(255,255,255,0.35); border-radius: 6px;
-  display: flex; align-items: center; justify-content: center; cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
-}
-.craft-cell:hover { background: rgba(255,255,255,0.24); }
-.craft-cell .swatch {
-  width: 38px; height: 38px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.4);
-  background-size: cover; image-rendering: pixelated; image-rendering: crisp-edges;
-}
-.craft-arrow { font-size: 28px; opacity: 0.7; }
-.craft-output {
-  width: 64px; height: 64px; background: rgba(255,255,255,0.08);
-  border: 2px solid rgba(255,224,138,0.5); border-radius: 8px;
-  display: flex; align-items: center; justify-content: center; cursor: pointer;
-  position: relative; flex-shrink: 0;
-}
-.craft-output.has-result { border-color: #ffe08a; background: rgba(255,224,138,0.18); }
-.craft-output .swatch {
-  width: 44px; height: 44px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.4);
-  background-size: cover; image-rendering: pixelated; image-rendering: crisp-edges;
-}
-.craft-output .out-count {
-  position: absolute; bottom: 2px; right: 4px; font-size: 12px; font-weight: bold;
-  color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000;
-}
-.craft-palette {
-  display: grid; grid-template-columns: repeat(6, 52px); gap: 8px; max-width: 480px;
-}
-.palette-cell {
-  width: 52px; height: 52px; background: rgba(255,255,255,0.1);
-  border: 2px solid rgba(255,255,255,0.3); border-radius: 6px;
-  display: flex; align-items: center; justify-content: center; cursor: pointer;
-  position: relative; transition: background 0.12s, border-color 0.12s;
-}
-.palette-cell:hover { background: rgba(255,255,255,0.22); }
-.palette-cell.armed { border-color: #ffe08a; box-shadow: 0 0 8px rgba(255,224,138,0.7); }
-.palette-cell .swatch {
-  width: 34px; height: 34px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.4);
-  background-size: cover; image-rendering: pixelated; image-rendering: crisp-edges;
-}
-.palette-cell .count {
-  position: absolute; bottom: 1px; right: 3px; font-size: 10px; font-weight: bold;
-  color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000;
-}
   #pickerGrid {
     display: grid; grid-template-columns: repeat(5, 64px); gap: 10px;
   }
@@ -140,6 +86,110 @@
   }
   #blockPicker .hint { margin-top: 16px; font-size: 13px; opacity: 0.7; }
 
+  /* ---------- Crafting (personal 2x2 + table 3x3) ---------- */
+  .craft-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.65); color: #fff;
+    display: none; align-items: center; justify-content: center; flex-direction: column;
+    z-index: 25; text-align: center;
+  }
+  .craft-overlay h1 { margin: 0 0 14px; font-size: 26px; }
+  .craft-area { display: flex; align-items: center; gap: 18px; margin-bottom: 20px; }
+  .craft-grid { display: grid; gap: 8px; }
+  .craft-cell {
+    width: 56px; height: 56px; background: rgba(255,255,255,0.12);
+    border: 2px solid rgba(255,255,255,0.35); border-radius: 6px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    position: relative; transition: background 0.12s, border-color 0.12s;
+  }
+  .craft-cell:hover { background: rgba(255,255,255,0.24); }
+  .craft-cell .swatch {
+    width: 38px; height: 38px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.4);
+    background-size: cover; image-rendering: pixelated; image-rendering: crisp-edges;
+  }
+  .craft-arrow { font-size: 28px; opacity: 0.7; }
+  .craft-output {
+    width: 64px; height: 64px; background: rgba(255,255,255,0.08);
+    border: 2px solid rgba(255,224,138,0.5); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    position: relative; flex-shrink: 0;
+  }
+  .craft-output.has-result { border-color: #ffe08a; background: rgba(255,224,138,0.18); }
+  .craft-output .swatch {
+    width: 44px; height: 44px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.4);
+    background-size: cover; image-rendering: pixelated; image-rendering: crisp-edges;
+  }
+  .craft-output .out-count {
+    position: absolute; bottom: 2px; right: 4px; font-size: 12px; font-weight: bold;
+    color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000;
+  }
+  .craft-palette {
+    display: grid; grid-template-columns: repeat(6, 52px); gap: 8px; max-width: 480px;
+  }
+  .palette-cell {
+    width: 52px; height: 52px; background: rgba(255,255,255,0.1);
+    border: 2px solid rgba(255,255,255,0.3); border-radius: 6px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    position: relative; transition: background 0.12s, border-color 0.12s;
+  }
+  .palette-cell:hover { background: rgba(255,255,255,0.22); }
+  .palette-cell .swatch {
+    width: 34px; height: 34px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.4);
+    background-size: cover; image-rendering: pixelated; image-rendering: crisp-edges;
+  }
+  .craft-cell .count,
+  .palette-cell .count {
+    position: absolute; bottom: 1px; right: 3px; font-size: 10px; font-weight: bold;
+    color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000;
+  }
+  .craft-overlay .hint { margin-top: 4px; font-size: 13px; opacity: 0.7; max-width: 480px; }
+
+  #craftCursor {
+    position: fixed; top: 0; left: 0; transform: translate(-50%, -50%);
+    width: 40px; height: 40px; display: none; align-items: center; justify-content: center;
+    pointer-events: none; z-index: 30;
+  }
+  #craftCursor .swatch {
+    width: 34px; height: 34px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.4);
+    background-size: cover; image-rendering: pixelated; image-rendering: crisp-edges;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.6));
+  }
+  #craftCursor .count {
+    position: absolute; bottom: -2px; right: -4px; font-size: 12px; font-weight: bold;
+    color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000;
+  }
+  .craft-overlay { position: fixed; } /* already set -- just confirming context for .craft-close below */
+
+.craft-close {
+  position: absolute; top: 14px; right: 18px; width: 34px; height: 34px;
+  border-radius: 50%; border: 2px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.1);
+  color: #fff; font-size: 18px; line-height: 1; cursor: pointer; display: flex;
+  align-items: center; justify-content: center; transition: background .12s, border-color .12s;
+}
+.craft-close:hover { background: rgba(255,80,80,0.35); border-color: #ff8080; }
+
+.recipe-book {
+  display: none; flex-direction: column; gap: 8px; margin-top: 12px;
+  max-height: 220px; overflow-y: auto; padding: 10px; width: 100%; max-width: 520px;
+  background: rgba(0,0,0,0.25); border-radius: 8px; text-align: left;
+}
+.recipe-row { display: flex; align-items: center; gap: 8px; }
+.recipe-mini-grid { display: grid; gap: 3px; }
+.recipe-mini-cell {
+  width: 34px; height: 34px; background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.25); border-radius: 4px;
+  display: flex; align-items: center; justify-content: center; position: relative;
+}
+.recipe-mini-cell .swatch {
+  width: 24px; height: 24px; border-radius: 3px; background-size: cover;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+}
+.recipe-mini-cell .count {
+  position: absolute; bottom: -1px; right: 1px; font-size: 9px; font-weight: bold;
+  color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000;
+}
+.recipe-mini-output { border-color: rgba(255,224,138,0.6); flex-shrink: 0; }
+.recipe-arrow { font-size: 16px; opacity: 0.7; flex-shrink: 0; }
+.recipe-label { font-size: 12px; opacity: 0.85; margin-left: 4px; }
   #info {
     position: fixed; top: 14px; left: 14px; color: #fff; z-index: 10;
     background: rgba(0,0,0,0.4); padding: 10px 14px; border-radius: 8px;
@@ -209,6 +259,7 @@
   <p class="hint">Click a block to assign it to the selected slot &middot; B or Esc to close</p>
 </div>
 <div id="craftingOverlay" class="craft-overlay">
+  <button class="craft-close" id="craftClosePersonal" title="Close">&times;</button>
   <h1>Crafting</h1>
   <div class="craft-area">
     <div class="craft-grid" id="craftGridPersonal"></div>
@@ -216,10 +267,13 @@
     <div class="craft-output" id="craftOutputPersonal"></div>
   </div>
   <div class="craft-palette" id="craftPalettePersonal"></div>
-  <p class="hint">Click a material, then click a grid cell to place it &middot; click a filled cell to take it back &middot; click the output to craft &middot; E or Esc to close</p>
+  <p class="hint">Left-click a slot to pick up/place/merge &middot; click a held material again to drop it &middot; right-click to split/place-one &middot; click the output to craft (Shift+click to craft all)</p>
+  <button class="menu-btn" id="craftRecipesBtnPersonal" style="margin-top:10px;">Show Recipes</button>
+  <div class="recipe-book" id="craftRecipeBookPersonal"></div>
 </div>
 
 <div id="craftingTableOverlay" class="craft-overlay">
+  <button class="craft-close" id="craftCloseTable" title="Close">&times;</button>
   <h1>Crafting Table</h1>
   <div class="craft-area">
     <div class="craft-grid" id="craftGridTable"></div>
@@ -227,8 +281,13 @@
     <div class="craft-output" id="craftOutputTable"></div>
   </div>
   <div class="craft-palette" id="craftPaletteTable"></div>
-  <p class="hint">Click a material, then click a grid cell to place it &middot; click a filled cell to take it back &middot; click the output to craft &middot; Esc to close</p>
+  <p class="hint">Left-click a slot to pick up/place/merge &middot; click a held material again to drop it &middot; right-click to split/place-one &middot; click the output to craft (Shift+click to craft all)</p>
+  <button class="menu-btn" id="craftRecipesBtnTable" style="margin-top:10px;">Show Recipes</button>
+  <div class="recipe-book" id="craftRecipeBookTable"></div>
 </div>
+
+<div id="craftCursor"></div>
+
 <div id="overlay">
   <div id="menuButtons">
     <h1 id="menuTitle">Block World</h1>
@@ -246,11 +305,13 @@
       <tr><td class="key">Space</td><td>Jump / swim up / fly up</td></tr>
       <tr><td class="key">Double-tap W</td><td>Swim sprint (while in water)</td></tr>
       <tr><td class="key">Double-tap Space</td><td>Toggle flight (Creative only)</td></tr>
-      <tr><td class="key">Shift</td><td>Fly down (while flying)</td></tr>
+      <tr><td class="key">Shift</td><td>Sneak (on ground) &middot; fly down (while flying)</td></tr>
       <tr><td class="key">Hold left click</td><td>Destroy block</td></tr>
       <tr><td class="key">Right click</td><td>Place block</td></tr>
       <tr><td class="key">1 – 9</td><td>Select block type</td></tr>
       <tr><td class="key">B</td><td>Open block picker</td></tr>
+      <tr><td class="key">E</td><td>Open crafting (2&times;2)</td></tr>
+      <tr><td class="key">Right-click table</td><td>Open crafting table (3&times;3)</td></tr>
       <tr><td class="key">C</td><td>Toggle Creative / Survival</td></tr>
       <tr><td class="key">Esc</td><td>Pause / menu</td></tr>
     </table>
